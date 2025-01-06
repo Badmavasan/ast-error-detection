@@ -78,17 +78,17 @@ This indicates that the error is in the condition of an `if` statement inside a 
 
 ### Input Code 1
 ```python
-# Add your first code example here
+print('Hello')
 ```
 
 ### Input Code 2
 ```python
-# Add your second code example here
+print('Hello1')
 ```
 
 ### Output
-```python
-# Example output here
+```bash
+[('CONST_VALUE_MISMATCH', "Const: 'Hello'", "Const: 'Hello1'", "Module > Call: print > Const: 'Hello'")]
 ```
 
 ---
