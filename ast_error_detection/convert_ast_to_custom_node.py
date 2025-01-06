@@ -1,4 +1,4 @@
-# This file is part of ast-error-detection.
+# This file is part of ast_error_detection.
 # Copyright (C) 2025 Badmavasan.
 #
 # This program is free software: you can redistribute it and/or modify
@@ -9,7 +9,7 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import ast
-from node import Node
+from .node import Node
 
 
 def handle_comparison(comparison_node):

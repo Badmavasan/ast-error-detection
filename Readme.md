@@ -21,7 +21,7 @@ This library is under an ongoing scientific study. If you use it for academic pu
 Install the package via pip:
 
 ```bash
-pip install ast-error-detection
+pip install ast_error_detection
 ```
 
 ---
