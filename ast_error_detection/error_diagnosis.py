@@ -39,7 +39,7 @@ def get_code_errors(code1: str, code2: str):
         raise ValueError("Failed to parse one or both code snippets.")
 
     # Zhang-Shasha Tree Edit Distance computation
-    _, ops = distance(
+    dist , ops = distance(
         tree1[0],
         tree2[0],
         get_children=Node.get_children,
@@ -49,4 +49,4 @@ def get_code_errors(code1: str, code2: str):
     error_annotation = ErrorAnnotation()
     errors = error_annotation.concatenate_all_errors(ops)
 
-    return errors
+    return dist, errors
