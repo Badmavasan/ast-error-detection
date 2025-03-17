@@ -10,6 +10,7 @@
 
 import ast
 from .convert_ast_to_custom_node import ast_to_custom_node
+from .error_checks import get_customized_error_tags
 from .zang_shasha_distance import distance
 from .node import Node
 from .error_annotation import ErrorAnnotation
@@ -50,3 +51,8 @@ def get_code_errors(code1: str, code2: str):
     errors = error_annotation.concatenate_all_errors(ops)
 
     return dist, errors
+
+def get_customized_code_error(code1: str, code2: str):
+    dist , errors = get_code_errors(code1, code2)
+    customized_error_tags = get_customized_error_tags(errors)
+    return dist, customized_error_tags
