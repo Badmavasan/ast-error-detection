@@ -62,7 +62,7 @@ def get_customized_error_tags(input_list):
         context = error_details[-1]
 
         # Rule 1: CONST_VALUE_MISMATCH with specific context substring.
-        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and "For > Condition: > Call: rang > Const" in context:
+        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and "For > Condition: > Call: range > Const" in context:
             error_list.append(FOR_LOOP_INCORRECT_NUMBER_OF_ITERATIONS)
 
         # Rule 2: Tag exactly matches MISSING_FOR_LOOP.

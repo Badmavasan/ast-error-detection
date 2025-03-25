@@ -18,4 +18,4 @@ __all__ = [
     "visualize_plain_ast_from_code"
 ]
 
-__version__ = "0.2"
+__version__ = "0.3"

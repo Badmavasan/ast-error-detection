@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: asterrdetection
-Version: 0.2
+Version: 0.3
 Summary: A package for finding the list of errors in a code compared to the expected code
 Home-page: https://github.com/Badmavasan/ast-error-detection
 Author: Badmavasan KIROUCHENASSAMY
@@ -44,7 +44,7 @@ pip install ast_error_detection
 
 ## Usage
 
-Here’s a basic example of how to use the library:
+Hereâ€™s a basic example of how to use the library:
 
 ```python
 from ast-error-detection import get_code_errors
