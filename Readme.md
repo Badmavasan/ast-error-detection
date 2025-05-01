@@ -91,6 +91,42 @@ print('Hello1')
 [('CONST_VALUE_MISMATCH', "Const: 'Hello'", "Const: 'Hello1'", "Module > Call: print > Const: 'Hello'")]
 ```
 
+### List of error tags 
+
+| **ERROR** | **DETAILS / EXAMPLES** | **TASK TYPE(S)** | **ERROR TAG** | **IN LIBRARY?** |
+|:---------:|:----------------------|:-----------------|:-------------:|:---------------:|
+| | **VARIABLES** | | | |
+| (**VA-Err1**) Error in variable declaration and initialization | Wrong type chosen for the variable or wrong value during initialization | VA – Produce a variable (and children) | **VARIABLE_DECLARATION_INITIALIZATION_ERROR** | ✗ |
+| (**VA-Err2**) Missing variable increment | Typical counter problem: variable never modified or reset each time | — | **VARIABLE_MISSING_INCREMENT** | ✗ |
+| (**VA-Err3**) Invalid variable name | Forbidden character or reserved keyword used | VA – Choose a valid name | **VARIABLE_INVALID_NAME** | ✗ |
+| | **CONDITIONAL STATEMENTS** | | | |
+| (**CS-Err1**) Incorrect number of branches | A case is missing or branches overlap | IC – Determine the necessary branches; partition the cases | **CONDITIONAL_MISSING_BRANCH** | ✗ |
+| (**CS-Err2**) Misplaced instructions in a conditional | An instruction is in the wrong branch or outside the conditional | IC – Assign the right action to each branch | **CONDITIONAL_MISPLACED_INSTRUCTIONS** | ✗ |
+| | **FUNCTIONS** | | | |
+| (**F-Err1**) Function definition error | Missing/incorrect parameters, wrong preconditions, incorrect return | F – Define parameters, preconditions, returns | **FUNCTION_DEFINITION_ERROR** | ✗ |
+| (**F-Err2**) Function call parameter error | Called with wrong parameters or return value not captured | — | **FUNCTION_CALL_PARAMETER_ERROR** | ✗ |
+| (**F-Err3**) Invalid function or parameter name | Forbidden character or reserved keyword used | F – Name function and parameters | **FUNCTION_INVALID_NAME** | ✗ |
+| | **LOOPS** | | | |
+| (**LO-Err1**) Loop iterator usage error | Wrong start/end values or iterator ignored | B – Correct use of loop iterator | **LOOP_ITERATOR_USAGE_ERROR** | ✗ |
+| (**LO-Err2**) Off-by-one loop error | Loop runs one time too many or too few | B – Determine iteration count | **LOOP_OFF_BY_ONE_ERROR** | ✗ |
+| (**LO-Err3**) Wrong loop iteration count (> 2) | Loop executes an entirely wrong number of times | B – Determine iteration count | **LOOP_WRONG_ITERATION_COUNT** | ✗ |
+| (**LO-Err4**) Start condition error | Incorrect initial loop condition | B – Stop condition (unbounded loop) | **LOOP_START_CONDITION_ERROR** | ✗ |
+| (**LO-Err5**) Update condition error | Stop condition never updated or updated incorrectly | B – Modify stop condition | **LOOP_UPDATE_CONDITION_ERROR** | ✗ |
+| (**LO-Err6**) Missing instruction in loop body (not present anywhere) | Expected instruction absent from both loop and program | B – Instructions each iteration | **LOOP_BODY_MISSING_INSTRUCTIONS** | ✗ |
+| (**LO-Err7**) Missing instruction in loop body (moved elsewhere) | Instruction exists but outside the loop | B – Instructions each iteration | **LOOP_BODY_INSTRUCTIONS_MOVED_OUT** | ✗ |
+| (**LO-Err8**) Incorrect instruction close to expected | Instruction present but incorrect / nearly correct | B – Instructions each iteration | **LOOP_BODY_INCORRECT_INSTRUCTIONS_NEAR** | ✗ |
+| (**LO-Err9**) Extra unwanted instruction in loop body | Superfluous instruction unrelated to task | B – Instructions each iteration | **LOOP_BODY_EXTRA_INSTRUCTIONS** | ✗ |
+| | **EXPRESSIONS** | | | |
+| (**EXP-Err1**) Boolean condition error | Uses `<` instead of `≤`, etc. | IC – Correct boolean expression | **EXPRESSION_BOOLEAN_CONDITION_ERROR** | ✗ |
+| (**EXP-Err2**) Assignment expression error | Part of expression missing or wrong operator | VA – Assign correct expression | **EXPRESSION_ASSIGNMENT_ERROR** | ✗ |
+| | **PROGRAM & ALGORITHM** | | | |
+| (**PA-Err1**) Problem decomposition / strategy error | Program omits expected control structures | P/A – Design & decompose algorithm | **PROGRAM_DECOMPOSITION_STRATEGY_ERROR** | ✗ |
+| (**PA-Err2**) Requirements misunderstood | Program correct but solves a different task | — | **PROGRAM_REQUIREMENTS_MISUNDERSTOOD** | ✗ |
+| (**PA-Err3**) Incomplete program | Correct fragments present but sequence missing | A – Complete instructions | **PROGRAM_INCOMPLETE** | ✗ |
+| (**PA-Err4**) Program not optimized | Task done but redundantly (no loops/functions) | P/A – Optimize or adapt algorithm | **PROGRAM_NOT_OPTIMIZED** | ✗ |
+
+These error tags were created as part of an ongoing research project that systematically analyzes novice programming mistakes in a controlled study. The formal paper detailing the methodology and validation of the taxonomy is still in preparation and has not yet been published.
+
 ---
 
 ## License
