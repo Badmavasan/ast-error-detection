@@ -1,12 +1,14 @@
-from ast_error_detection.constants import FOR_LOOP_INCORRECT_NUMBER_OF_ITERATIONS, FOR_LOOP_MISSING, \
+
+"""from ast_error_detection.constants import FOR_LOOP_INCORRECT_NUMBER_OF_ITERATIONS, FOR_LOOP_MISSING, \
     FOR_LOOP_BODY_MISMATCH, MISSING_STATEMENT, ERROR_VALUE_PARAMETER, ANNOTATION_TAG_CONST_VALUE_MISMATCH, \
     ANNOTATION_TAG_MISSING_FOR_LOOP, ANNOTATION_CONTEXT_FOR_LOOP_BODY, ANNOTATION_TGA_MISSING, \
-    ANNOTATION_CONTEXT_FUNCTION_PARAMETER
+    ANNOTATION_CONTEXT_FUNCTION_PARAMETER, LO_NUMBER_ITERATION_ERROR, LO_NUMBER_ITERATION_ERROR_UNDER2"""
+from ast_error_detection.constants import *
 
 import re
 
 
-def get_customized_error_tags(input_list):
+def get_customized_error_tags2(input_list):
     """
     Analyzes a list of error details for specific tag and context patterns,
     returning a list of error code strings based on the following rules.
@@ -75,6 +77,95 @@ def get_customized_error_tags(input_list):
 
         # Rule 4: Tag contains "MISSING".
         if ANNOTATION_TGA_MISSING in tag and tag != ANNOTATION_TAG_MISSING_FOR_LOOP:
+            error_list.append(MISSING_STATEMENT)
+
+        # Rule 5: CONST_VALUE_MISMATCH with context ending with the specified pattern.
+        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and pattern_value_parameter.search(context):
+            error_list.append(ERROR_VALUE_PARAMETER)
+
+    return set(error_list)
+
+def get_customized_error_tags(input_list): # new version
+    """
+    Analyzes a list of error details for specific tag and context patterns,
+    returning a list of error code strings based on the following rules.
+
+    Each element in the input list should be a list of either 3 or 4 elements.
+    The first element is treated as the error tag and the last element as the error context.
+
+    Rules:
+        1. If the tag is "CONST_VALUE_MISMATCH" and the context contains
+           "For > Condition: > Call: rang > Const", or "While > Condition: > Compare" then add:
+               "LO_NUMBER_ITERATION_ERROR" OR "LO_NUMBER_ITERATION_ERROR_UNDER2"
+           (Indicates a constant value mismatch in a for loop's condition. The difference being either 1 or greater.)
+
+        2. If the tag exactly matches "MISSING_FOR_LOOP" or "MISSING_WHILE_LOOP", then add:
+               "LO_FOR_MISSING" "LO_WHILE_MISSING"
+           (Indicates that a for loop is missing where expected.)
+
+
+
+        4. If the tag contains the substring "MISSING", then add:
+               "MISSING_STATEMENT"
+           (Indicates that a required statement is missing.)
+
+        5. If the tag is "CONST_VALUE_MISMATCH" and the context ends with a pattern matching
+           "Call: <any_text> > Const: <any_text>", then add:
+               "ERROR_VALUE_PARAMETER"
+           (Indicates that there is an error in the value parameter of a call.)
+
+    Note: The context matching does not require an exact match; it is sufficient for the
+    context string to contain the specified substrings or patterns.
+
+    Args:
+        input_list (list): A list of error detail lists. Each error detail list must contain
+                           3 or 4 elements. The first element is the error tag and the last
+                           element is the context.
+
+    Returns:
+        list: A list of error code strings that match the conditions. If no conditions match,
+              an empty list is returned.
+    """
+    error_list = []
+    pattern_value_parameter = re.compile(ANNOTATION_CONTEXT_FUNCTION_PARAMETER)
+
+    for error_details in input_list:
+        # Ensure the error detail has the expected number of elements; if not, skip it.
+        if len(error_details) not in (3, 4):
+            continue
+
+        tag = error_details[0]
+        context = error_details[-1]
+        context2 = error_details[-2]
+
+        # Rule 1: CONST_VALUE_MISMATCH with specific context substring.
+        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and ("For > Condition: > Call: range > Const" in context or "While > Condition: > Compare" in context):
+            number1 = int(context.split(" ")[-1])
+            number2 = int(context2.split(" ")[-1])
+            if abs(number1-number2) > 1 :
+                error_list.append(LO_NUMBER_ITERATION_ERROR)
+            else :
+                error_list.append(LO_NUMBER_ITERATION_ERROR_UNDER2)
+
+        # Rule 2: MISSING LOOP OR CS OR FUNCTION
+        if tag == ANNOTATION_TAG_MISSING_FOR_LOOP:
+            error_list.append(LO_FOR_MISSING)
+
+        if tag == ANNOTATION_TAG_MISSING_WHILE_LOOP:
+            error_list.append(LO_WHILE_MISSING)
+
+        if tag == ANNOTATION_TAG_MISSING_CS:
+            error_list.append(CS_MISSING)
+
+        if tag == ANNOTATION_TAG_MISSING_FUNCTION_DEFINITION:
+            error_list.append(F_DEFINITION_MISSING)
+
+        # CS : error 2
+        if ANNOTATION_CONTEXT_CS_BODY in context:
+            error_list.append(CS_BODY_ERROR)
+
+        # Rule 4: Tag contains "MISSING".
+        if ANNOTATION_TGA_MISSING in tag and tag != ANNOTATION_TAG_MISSING_FOR_LOOP:#not in [ANNOTATION_TAG_MISSING_FOR_LOOP, ANNOTATION_TAG_MISSING_WHILE_LOOP, ANNOTATION_TAG_MISSING_CS, ANNOTATION_CONTEXT_FOR_LOOP_BODY]:
             error_list.append(MISSING_STATEMENT)
 
         # Rule 5: CONST_VALUE_MISMATCH with context ending with the specified pattern.

@@ -1,3 +1,4 @@
+
 # This file is part of ast_error_detection.
 # Copyright (C) 2025 Badmavasan.
 #
@@ -13,7 +14,7 @@ from .convert_ast_to_custom_node import ast_to_custom_node
 from .error_checks import get_customized_error_tags
 from .zang_shasha_distance import distance
 from .node import Node
-from .error_annotation import ErrorAnnotation
+from .error_annotation import ErrorAnnotation, ErrorAnnotation2
 
 
 def get_code_errors(code1: str, code2: str):
@@ -71,7 +72,7 @@ def get_code_errors(code1: str, code2: str):
     # (initialized even in a different file)) that can handle act as a wrapper for specialized
     # processing of Zhan Shasha edit operations.
 
-    error_annotation = ErrorAnnotation()
+    error_annotation = ErrorAnnotation2()
     errors = error_annotation.concatenate_all_errors(ops)
 
     # --- End of Critical Section ---
