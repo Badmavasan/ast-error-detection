@@ -138,16 +138,30 @@ def get_customized_error_tags(input_list): # new version
         context = error_details[-1]
         context2 = error_details[-2]
 
-        # Rule 1: CONST_VALUE_MISMATCH with specific context substring.
-        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and ("For > Condition: > Call: range > Const" in context or "While > Condition: > Compare" in context):
+        # ITERATION ERROR
+        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and "For > Condition: > Call: range > Const" in context:
             number1 = int(context.split(" ")[-1])
             number2 = int(context2.split(" ")[-1])
             if abs(number1-number2) > 1 :
-                error_list.append(LO_NUMBER_ITERATION_ERROR)
+                error_list.append(LO_FOR_NUMBER_ITERATION_ERROR)
             else :
-                error_list.append(LO_NUMBER_ITERATION_ERROR_UNDER2)
+                error_list.append(LO_FOR_NUMBER_ITERATION_ERROR_UNDER2)
+        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and "While > Condition: > Compare" in context:
+            number1 = int(context.split(" ")[-1])
+            number2 = int(context2.split(" ")[-1])
+            print("coucou", number1, number2)
+            if abs(number1-number2) > 1 :
+                error_list.append(LO_WHILE_NUMBER_ITERATION_ERROR)
+            else :
+                error_list.append(LO_WHILE_NUMBER_ITERATION_ERROR_UNDER2)
 
-        # Rule 2: MISSING LOOP OR CS OR FUNCTION
+        # BODY MISSING
+        if tag in ANNOTATION_TGA_INCORRECT_POSITION_LOOP :
+            error_list.append(LO_BODY_MISPLACED)
+        if ANNOTATION_TGA_MISSING in tag and (ANNOTATION_CONTEXT_FOR_LOOP_BODY in context or ANNOTATION_CONTEXT_WHILE_LOOP_BODY in context):
+            error_list.append(LO_BODY_MISSING_NOT_PRESENT_ANYWHERE)
+
+        # MISSING LOOP OR CS OR FUNCTION
         if tag == ANNOTATION_TAG_MISSING_FOR_LOOP:
             error_list.append(LO_FOR_MISSING)
 
@@ -160,10 +174,14 @@ def get_customized_error_tags(input_list): # new version
         if tag == ANNOTATION_TAG_MISSING_FUNCTION_DEFINITION:
             error_list.append(F_DEFINITION_MISSING)
 
-        # CS : error 2
-        if ANNOTATION_CONTEXT_CS_BODY in context:
+        # CS : error 2 : body error or body missing
+        if ANNOTATION_TGA_MISSING in tag and ANNOTATION_CONTEXT_CS_BODY in context:
             error_list.append(CS_BODY_ERROR)
 
+        # CS : error 3 : body_misplaced
+        if tag == ANNOTATION_TGA_INCORRECT_POSITION_CS:
+            error_list.append(CS_BODY_MISPLACED)
+        '''
         # Rule 4: Tag contains "MISSING".
         if ANNOTATION_TGA_MISSING in tag and tag != ANNOTATION_TAG_MISSING_FOR_LOOP:#not in [ANNOTATION_TAG_MISSING_FOR_LOOP, ANNOTATION_TAG_MISSING_WHILE_LOOP, ANNOTATION_TAG_MISSING_CS, ANNOTATION_CONTEXT_FOR_LOOP_BODY]:
             error_list.append(MISSING_STATEMENT)
@@ -171,5 +189,5 @@ def get_customized_error_tags(input_list): # new version
         # Rule 5: CONST_VALUE_MISMATCH with context ending with the specified pattern.
         if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and pattern_value_parameter.search(context):
             error_list.append(ERROR_VALUE_PARAMETER)
-
+        '''
     return set(error_list)
