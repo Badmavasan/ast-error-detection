@@ -443,6 +443,10 @@ class ErrorAnnotation2:
                         missing_errors.append(("MISSING_CONST_VALUE", value, context_path))
                     elif node_type == "OPERATION":
                         missing_errors.append(("MISSING_OPERATION", value, context_path))
+                    elif node_type == "ARG":
+                        missing_errors.append(("MISSING_ARGUMENT", value, context_path))
+                    elif node_type == "VAR":
+                        missing_errors.append(("MISSING_VARIABLE", value, context_path))
 
         return list(set(missing_errors))  # Remove duplicates
 
@@ -517,6 +521,8 @@ class ErrorAnnotation2:
                         unnecessary_errors.append(("UNNECESSARY_CONST_VALUE", value, context_path))
                     elif node_type == "OPERATION":
                         unnecessary_errors.append(("UNNECESSARY_OPERATION", value, context_path))
+                    elif node_type == "ARG":
+                        unnecessary_errors.append(("UNNECESSARY_ARGUMENT", value, context_path))
 
         return list(set(unnecessary_errors))  # Remove duplicates
 

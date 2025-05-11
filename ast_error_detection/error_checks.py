@@ -76,7 +76,7 @@ def get_customized_error_tags2(input_list):
             error_list.append(FOR_LOOP_BODY_MISMATCH)
 
         # Rule 4: Tag contains "MISSING".
-        if ANNOTATION_TGA_MISSING in tag and tag != ANNOTATION_TAG_MISSING_FOR_LOOP:
+        if ANNOTATION_TAG_MISSING in tag and tag != ANNOTATION_TAG_MISSING_FOR_LOOP:
             error_list.append(MISSING_STATEMENT)
 
         # Rule 5: CONST_VALUE_MISMATCH with context ending with the specified pattern.
@@ -156,9 +156,9 @@ def get_customized_error_tags(input_list): # new version
                 error_list.append(LO_WHILE_NUMBER_ITERATION_ERROR_UNDER2)
 
         # BODY MISSING
-        if tag in ANNOTATION_TGA_INCORRECT_POSITION_LOOP :
+        if tag in ANNOTATION_TAG_INCORRECT_POSITION_LOOP :
             error_list.append(LO_BODY_MISPLACED)
-        if ANNOTATION_TGA_MISSING in tag and (ANNOTATION_CONTEXT_FOR_LOOP_BODY in context or ANNOTATION_CONTEXT_WHILE_LOOP_BODY in context):
+        if ANNOTATION_TAG_MISSING in tag and (ANNOTATION_CONTEXT_FOR_LOOP_BODY in context or ANNOTATION_CONTEXT_WHILE_LOOP_BODY in context):
             error_list.append(LO_BODY_MISSING_NOT_PRESENT_ANYWHERE)
 
         # MISSING LOOP OR CS OR FUNCTION
@@ -175,13 +175,31 @@ def get_customized_error_tags(input_list): # new version
             error_list.append(F_DEFINITION_MISSING)
 
         # CS : error 2 : body error or body missing
-        if ANNOTATION_TGA_MISSING in tag and ANNOTATION_CONTEXT_CS_BODY in context:
+        if ANNOTATION_TAG_MISSING in tag and ANNOTATION_CONTEXT_CS_BODY in context:
             error_list.append(CS_BODY_ERROR)
 
         # CS : error 3 : body_misplaced
-        if tag == ANNOTATION_TGA_INCORRECT_POSITION_CS:
+        if tag == ANNOTATION_TAG_INCORRECT_POSITION_CS:
             error_list.append(CS_BODY_MISPLACED)
+
+        # VAR : error 1 : Initialization
+        if tag == VAR_CONST_MISMATCH and ANNOTATION_CONTEXT_VAR in context:
+            error_list.append(VA_DECLARATION_INITIALIZATION_ERROR)
+
+        # FONCTION : error 1 : definition error arg
+        if tag == ANNOTATION_TAG_MISSING_ARGUMENT or tag == ANNOTATION_TAG_UNNECESSARY_ARGUMENT:
+            error_list.append(F_DEFINITION_ERROR_ARG)
+
+        # FUNCTION : error 2 : definition error return
+        if tag == ANNOTATION_TAG_MISSING_RETURN or tag == ANNOTATION_TAG_UNNECESSARY_RETURN or (tag == ANNOTATION_TAG_MISSING_VARIABLE and ANNOTATION_CONTEXT_RETURN_1 in context and ANNOTATION_CONTEXT_RETURN_2 in context):
+            error_list.append(F_DEFINITION_ERROR_RETURN)
+
+        # EXP : error 1 : error conditional branch
+        if tag == ANNOTATION_TAG_INCORRECT_OPERATION_IN_CS :
+            error_list.append(EXP_ERROR_CONDITIONAL_BRANCH)
+
         '''
+        
         # Rule 4: Tag contains "MISSING".
         if ANNOTATION_TGA_MISSING in tag and tag != ANNOTATION_TAG_MISSING_FOR_LOOP:#not in [ANNOTATION_TAG_MISSING_FOR_LOOP, ANNOTATION_TAG_MISSING_WHILE_LOOP, ANNOTATION_TAG_MISSING_CS, ANNOTATION_CONTEXT_FOR_LOOP_BODY]:
             error_list.append(MISSING_STATEMENT)
