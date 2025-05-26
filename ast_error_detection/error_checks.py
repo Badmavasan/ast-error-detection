@@ -198,6 +198,9 @@ def get_customized_error_tags(input_list): # new version
         if tag == ANNOTATION_TAG_INCORRECT_OPERATION_IN_CS :
             error_list.append(EXP_ERROR_CONDITIONAL_BRANCH)
 
+        if (tag == ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT or tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH) and (ANNOTATION_CONTEXT_FOR_LOOP_BODY in context or ANNOTATION_CONTEXT_WHILE_LOOP_BODY in context):
+            error_list.append(LO_BODY_ERROR)
+
         '''
         
         # Rule 4: Tag contains "MISSING".
