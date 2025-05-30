@@ -361,7 +361,7 @@ class ErrorAnnotation2:
             list: A combined list of tuples from all error detection functions.
         """
         # Call individual detection functions
-        print("paterns :",patterns)
+        #print("paterns :",patterns)
         missing_statements = self.detect_specific_missing_constructs(patterns)
         unnecessary_deletions = self.detect_unnecessary_deletions(patterns)
         incorrect_positions = self.detect_incorrect_statement_positions(patterns)

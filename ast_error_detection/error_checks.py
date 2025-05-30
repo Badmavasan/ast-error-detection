@@ -149,7 +149,6 @@ def get_customized_error_tags(input_list): # new version
         if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and "While > Condition: > Compare" in context:
             number1 = int(context.split(" ")[-1])
             number2 = int(context2.split(" ")[-1])
-            print("coucou", number1, number2)
             if abs(number1-number2) > 1 :
                 error_list.append(LO_WHILE_NUMBER_ITERATION_ERROR)
             else :
@@ -160,6 +159,10 @@ def get_customized_error_tags(input_list): # new version
             error_list.append(LO_BODY_MISPLACED)
         if ANNOTATION_TAG_MISSING in tag and (ANNOTATION_CONTEXT_FOR_LOOP_BODY in context or ANNOTATION_CONTEXT_WHILE_LOOP_BODY in context):
             error_list.append(LO_BODY_MISSING_NOT_PRESENT_ANYWHERE)
+
+        # WHILE (a retirer par la suite)
+        if tag == ANNOTATION_TAG_INCORRECT_OPERATION_IN_EXP and ANNOTATION_CONTEXT_WHILE_LOOP_CONDITION in context :
+            error_list.append(LO_CONDITION_ERROR)
 
         # MISSING LOOP OR CS OR FUNCTION
         if tag == ANNOTATION_TAG_MISSING_FOR_LOOP:
@@ -195,7 +198,7 @@ def get_customized_error_tags(input_list): # new version
             error_list.append(F_DEFINITION_ERROR_RETURN)
 
         # EXP : error 1 : error conditional branch
-        if tag == ANNOTATION_TAG_INCORRECT_OPERATION_IN_CS :
+        if tag == ANNOTATION_TAG_INCORRECT_OPERATION_IN_EXP and ANNOTATION_CONTEXT_CS_CONDITION in context :
             error_list.append(EXP_ERROR_CONDITIONAL_BRANCH)
 
         if (tag == ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT or tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH) and (ANNOTATION_CONTEXT_FOR_LOOP_BODY in context or ANNOTATION_CONTEXT_WHILE_LOOP_BODY in context):
