@@ -28,10 +28,19 @@ pip install ast_error_detection
 
 ## Usage
 
-Here’s a basic example of how to use the library:
+There are 2 ways to use this library. 
+
+### Primary Error Detection
+
+The Primary Error Detection layer is responsible for identifying low-level structural and content modifications between two trees (typically a reference and a hypothesis tree). It serves as the foundational layer for subsequent high-level error interpretation. This component relies on the Zhang-Shasha Edit Distance Algorithm, a classic algorithm for computing the minimum-cost sequence of operations needed to transform one tree into another. The algorithm outputs three types of edit operations:
+- Insertions
+- Deletions
+- Updates
+
+Each operation corresponds to a specific node-level change and includes metadata `context`. These operations collectively represent the raw set of changes (or "primary errors") from which higher-level interpretations can be derived.
 
 ```python
-from ast-error-detection import get_code_errors
+from ast-error-detection import get_primary_code_errors
 
 # Example erroneous code to analyze
 code_1 = """ 
@@ -43,13 +52,13 @@ code_2 = """
 """
 
 # Convert AST to custom node representation
-result = get_code_errors(code_1, code_2)
+result = get_primary_code_errors(code_1, code_2)
 
 # Print the results
 print(result)
 ```
 
-### Output Format
+#### Output Format
 
 The output is always a list of errors. Each error is a dictionary structured as follows:
 
@@ -72,6 +81,51 @@ The context describes where the error occurred in the code execution hierarchy. 
 
 This indicates that the error is in the condition of an `if` statement inside a `for` loop within a function in the module.
 
+
+### Typology Based Error Detection
+
+While primary error detection provides atomic operations, Typology-Based Error Detection serves as a semantic interpretation layer. It classifies the primary operations into predefined error types (typologies), allowing for more meaningful feedback and error analysis.
+
+This module:
+- Consumes the output of the Primary Error Detection layer.
+- Applies a mapping schema to group and classify operations into specific typology classes.
+- Detects compound or context-dependent errors by evaluating relationships between multiple primary operations. (logic of each error is defined in the Table below)
+
+Unlike simple pairwise comparison, this component supports comparison of one erroneous code instance against multiple possible correct codes.
+- The first input is the hypothesis (erroneous AST).
+- The second input is a list of reference ASTs (multiple correct solutions).
+- The system computes the edit distance to each reference, selects the closest match, and performs typology-based annotation against that reference.
+
+This ensures the most contextually relevant and minimal-error interpretation is selected for annotation.
+
+```python
+from ast-error-detection import get_typology_based_code_error
+
+# Example erroneous code to analyze
+code_1 = """ 
+# Code snippet here
+"""
+# Example expected code list
+expected_codes = [
+  """ 
+  # Code snippet 1
+  """,
+  """ 
+  # Code snippet 2
+  """
+]
+
+# Convert AST to custom node representation
+result = get_typology_based_code_error(code_1, expected_codes)
+
+# Print the results
+print(result)
+```
+
+#### Output Format
+
+A list of string (Error tags) from the predefined set of Error tags (Ref Table below)
+
 ---
 
 ## Example
@@ -86,9 +140,15 @@ print('Hello')
 print('Hello1')
 ```
 
-### Output
-```bash
+### Output with Primary error Detection 
+```python
 [('CONST_VALUE_MISMATCH', "Const: 'Hello'", "Const: 'Hello1'", "Module > Call: print > Const: 'Hello'")]
+```
+
+### Output with Typology error Detection
+
+```python
+['FUNCTION_CALL_PARAMETER_ERROR']
 ```
 
 ### List of error tags 
@@ -133,7 +193,7 @@ These error tags were created as part of an ongoing research project that system
 
 This project is licensed under the GNU Affero General Public License v3 (AGPL-3.0). If you wish to use this library for proprietary or commercial purposes, you must obtain a separate license. 
 
-Please contact Badmavasan [Lip6] at [badmavasan.kirouchenassamy@lip6.fr] for commercial licensing inquiries.
+Please contact Badmavasan at [badmavasan.kirouchenassamy@lip6.fr] for commercial licensing inquiries.
 
 ---
 

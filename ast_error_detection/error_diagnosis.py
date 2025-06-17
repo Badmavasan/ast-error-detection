@@ -1,6 +1,5 @@
-
 # This file is part of ast_error_detection.
-# Copyright (C) 2025 Badmavasan.
+# Copyright (C) 2025 Badmavasan Kirouchenassamy & Eva Chouaki.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -14,10 +13,10 @@ from .convert_ast_to_custom_node import ast_to_custom_node
 from .error_checks import get_customized_error_tags
 from .zang_shasha_distance import distance
 from .node import Node
-from .error_annotation import ErrorAnnotation, ErrorAnnotation2
+from .error_annotation import ErrorAnnotation
 
 
-def get_code_errors(code1: str, code2: str):
+def get_primary_code_errors(code1: str, code2: str):
     """
     Given two Python code snippets, compute their differences as error annotations using
     a reimplemented version of the Zhang-Shasha tree edit distance algorithm.
@@ -72,72 +71,26 @@ def get_code_errors(code1: str, code2: str):
     # (initialized even in a different file)) that can handle act as a wrapper for specialized
     # processing of Zhan Shasha edit operations.
 
-    error_annotation = ErrorAnnotation2()
+    error_annotation = ErrorAnnotation()
     errors = error_annotation.concatenate_all_errors(ops)
 
     # --- End of Critical Section ---
 
     return dist, errors
 
-# ------------------------------------------------------------------------------
-# Future Implementation: get_code_errors_v2
-#
-# The get_code_errors_v2 function is planned as an enhanced version of get_code_errors fo create a completely new
-# function
-#
-# Objectives:
-#   - Leverage the reimplemented Zhang-Shasha tree edit distance algorithm to compute the edit
-#     distance between two code snippet trees.
-#   - Utilize an upgraded error processing wrapper that not only consolidates error tags from the
-#     list of edit operations but also provides detailed error paths for each annotated error.
-#   - Facilitate integration with additional functions or modules that may offer further error
-#     handling or debugging support.
-#
-# Expected Behavior:
-#   - The function will accept two Python code snippets as inputs.
-#   - It will compute the tree edit distance and capture a list of edit operations via the `distance`
-#     function.
-#   - Using the enhanced annotation processing method, it will generate a detailed list of error annotations.
-#   - It will return a tuple that contains:
-#         (computed_distance, detailed_error_list)
-#
-# Example Usage:
-#     dist, errors = get_code_errors_v2(code1, code2)
-#
-# def get_code_errors_v2(code1: str, code2: str):
-#     """
-#     Given two Python code snippets, compute their differences using an enhanced error annotation
-#     process that leverages the reimplemented Zhang-Shasha tree edit distance algorithm.
-#
-#     This function returns a tuple consisting of:
-#         - The tree edit distance (a numeric value representing the degree of change required)
-#         - A detailed list of error annotations that include error tags and corresponding error paths.
-#
-#     Args:
-#         code1 (str): The first code snippet.
-#         code2 (str): The second code snippet.
-#
-#     Returns:
-#         tuple: (distance, errors), where:
-#             - distance: The computed tree edit distance between the two code snippets.
-#             - errors (list): A list of detailed error annotations generated from the edit operations.
-#     """
-#     # Future implementation will go here...
-# ------------------------------------------------------------------------------
 
-
-def get_customized_code_error(code1: str, code2: str):
+def get_typology_based_code_error(incorrect_code : str, correct_code_list: list[str]):
     """
     Compute customized code error annotations by applying a two-step wrapper process.
 
     This function acts as a secondary wrapper around the core code error extraction process.
     It performs the following steps:
-      1. It first calls `get_code_errors`, which internally uses the reimplemented Zhang-Shasha
+      1. It first calls `get_primary_code_errors`, which internally uses the reimplemented Zhang-Shasha
          tree edit distance algorithm to calculate the differences between two Python code snippets.
-         - The `get_code_errors` function generates a detailed list of error annotations by calling
+         - The `get_primary_code_errors` function generates a detailed list of errors by calling
            the `concatenate_all_errors` method, resulting in a rich set of error data based on
            multiple criteria.
-      2. It then applies a customization overlay by calling `get_customized_error_tags` with the
+      2. It then applies a typology overlay by calling `get_customized_error_tags` with the
          original error list. This additional processing filters and refines the error tags according
          to a limited set of error types tailored for current services.
 
@@ -145,21 +98,26 @@ def get_customized_code_error(code1: str, code2: str):
       - Although the current two-step process (first generating all possible errors and then
         filtering them) is in use, it is not strictly necessary. A unified function that collects
         errors directly from the Zhang-Shasha edit operations could be used.
-      - The two-step process is retained because the detailed error annotations produced by
-        `get_code_errors` are currently more granular than needed for our services.
+      - The two-step process is retained because the detailed error detection produced by
+        `get_primary_code_errors` are currently more granular than needed for our services.
       - Future modifications may consolidate these steps if a simpler error collection process
         that aligns directly with service requirements is developed.
 
     Args:
-        code1 (str): The first Python code snippet (typically containing errors).
-        code2 (str): The second Python code snippet (serving as the reference correct version).
+        correct_code_list: Erroneous code snippet
+        incorrect_code: List of possible correct code snippets.
 
     Returns:
         tuple: A tuple containing:
             - dist: The computed tree edit distance between the two code snippets.
-            - customized_error_tags (list): A filtered list of error annotations after applying the
-              customization overlay.
+            - typology_based_error_tags (list): A filtered list of errors after applying the
+              typology rules overlay.
     """
-    dist, errors = get_code_errors(code1, code2)
-    customized_error_tags = get_customized_error_tags(errors)
-    return dist, customized_error_tags
+
+    results = []
+    for correct_code in correct_code_list:
+        dist, primary_errors = get_primary_code_errors(incorrect_code, correct_code)
+        typology_based_error_tags = get_customized_error_tags(primary_errors)
+        results.append([dist, typology_based_error_tags])
+
+    return min(results, key=lambda x: x[0])

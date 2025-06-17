@@ -1,5 +1,5 @@
 # This file is part of ast_error_detection.
-# Copyright (C) 2025 Badmavasan.
+# Copyright (C) 2025 Badmavasan Kirouchenassamy & Eva Chouaki.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
