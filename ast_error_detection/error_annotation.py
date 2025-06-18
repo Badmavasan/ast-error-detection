@@ -7,6 +7,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
+from ast_error_detection.constants import ANNOTATION_TAG_CONST_VALUE_MISMATCH, \
+    ANNOTATION_TAG_INCORRECT_OPERATION_IN_COMP, ANNOTATION_TAG_INCORRECT_OPERATION_IN_ASSIGN
+
 
 class ErrorAnnotation:
 
@@ -278,25 +281,24 @@ class ErrorAnnotation:
         # Analyze update operations
         for update in patterns:
             if update['type'] == 'update':
-                node_type = structural_path_element(update['path'][-1]).upper()  # Last element of the path
-                context_path = " > ".join(structural_path_element(p) for p in update['path'])  # Full path
+                path = update['path']
+                node_type = structural_path_element(path[-1]).upper()
+                context_path = " > ".join(structural_path_element(p) for p in path)
                 current_value = update['current']
                 new_value = update['new']
 
-                # Categorize updates
                 if "CALL" in node_type:
-                    updates.append(("CONSTANT_VALUE_MISMATCH", current_value, new_value, context_path))
-                elif "COMPARE" in node_type:  # For conditions
-                    updates.append(("INCORRECT_OPERATION_IN_CONDITION", current_value, new_value, context_path))
-                elif "OPERATION" in node_type:  # For assignments
-                    updates.append(("INCORRECT_OPERATION_IN_ASSIGN", current_value, new_value, context_path))
+                    updates.append((ANNOTATION_TAG_CONST_VALUE_MISMATCH, current_value, new_value, context_path))
+                elif "COMPARE" in node_type:
+                    updates.append((ANNOTATION_TAG_INCORRECT_OPERATION_IN_COMP, current_value, new_value, context_path))
+                elif "OPERATION" in node_type:
+                    updates.append((ANNOTATION_TAG_INCORRECT_OPERATION_IN_ASSIGN, current_value, new_value, context_path))
                 elif "CONST" in node_type:
-                    updates.append(("CONST_VALUE_MISMATCH", current_value, new_value, context_path))
+                    updates.append((ANNOTATION_TAG_CONST_VALUE_MISMATCH, current_value, new_value, context_path))
                 elif "ASSIGN" in node_type:
                     updates.append(("NODE_TYPE_MISMATCH", current_value, new_value, context_path))
                 elif "VAR" in node_type:
-                    # Skip variable updates for now
-                    continue
+                    continue  # Skip variable changes for now
 
         return updates
 
@@ -330,7 +332,7 @@ class ErrorAnnotation:
                     cur_node_type, cur_var_value = pattern['current'].split(": ", 1)
 
                     if ":" in pattern['new']:
-                        new_node_type , new_var_value = pattern['new'].split(": ", 1)
+                        new_node_type, new_var_value = pattern['new'].split(": ", 1)
 
                         # Check if the last element is a Var node
                         if cur_node_type.upper() == "VAR" and new_node_type.upper() == "VAR":
@@ -351,14 +353,3 @@ class ErrorAnnotation:
                     mismatches.append(("VARIABLE_MISMATCH", var_name, context_path))
 
         return mismatches
-
-
-
-
-
-
-
-
-
-
-
