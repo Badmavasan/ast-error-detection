@@ -21,12 +21,52 @@ class ErrorAnnotation:
         Returns:
             list: A combined list of tuples from all error detection functions.
         """
+
+        # --------- helpers (KEEP indices) ----------
+        def node_type_of_label(label: str) -> str:
+            # 'Var: i' -> 'VAR' | 'For' -> 'FOR' | 'Call: range' -> 'CALL'
+            base = (label or "").split("[")[0]
+            return base.split(":", 1)[0].strip().upper()
+
+        def is_for_insert(p) -> bool:
+            return p.get("type") == "insert" and node_type_of_label(p.get("new", "")) == "FOR"
+
+        def starts_with_prefix(path_elems, prefix_elems) -> bool:
+            if len(path_elems) < len(prefix_elems):
+                return False
+            for a, b in zip(path_elems, prefix_elems):
+                if a != b:  # exact match, indices included
+                    return False
+            return True
+
+        def under_any(anchor_set, path_elems) -> bool:
+            pe = tuple(path_elems)
+            return any(starts_with_prefix(pe, anc) for anc in anchor_set)
+
+        # --------- anchor the inserted/missing FORs ----------
+        insert_for_anchors = {tuple(p["path"]) for p in patterns if is_for_insert(p)}
+
+        # --------- filter patterns: suppress ONLY inside inserted FOR subtrees ----------
+        filtered_patterns = []
+        for p in patterns:
+            p_path = tuple(p.get("path", ()))
+
+            if under_any(insert_for_anchors, p_path):
+                # Keep only the exact FOR insert at its anchor path.
+                if is_for_insert(p) and p_path in insert_for_anchors:
+                    filtered_patterns.append(p)
+                # else: drop anything else (updates/inserts/deletes) inside that missing FOR subtree
+                continue
+
+            # No suppression for other/moved/existing FORs.
+            filtered_patterns.append(p)
+
         # Call individual detection functions
-        missing_statements = self.detect_specific_missing_constructs(patterns)
-        unnecessary_deletions = self.detect_unnecessary_deletions(patterns)
-        incorrect_positions = self.detect_incorrect_statement_positions(patterns)
-        updates = self.track_all_updates(patterns)
-        variable_mismatches = self.detect_variable_mismatches(patterns)
+        missing_statements = self.detect_specific_missing_constructs(filtered_patterns)
+        unnecessary_deletions = self.detect_unnecessary_deletions(filtered_patterns)
+        incorrect_positions = self.detect_incorrect_statement_positions(filtered_patterns)
+        updates = self.track_all_updates(filtered_patterns)
+        variable_mismatches = self.detect_variable_mismatches(filtered_patterns)
 
         # Combine all errors into one list
         all_errors = []
@@ -64,8 +104,7 @@ class ErrorAnnotation:
             return element.split("[")[0]
 
         # Extract all delete nodes for comparison
-        deleted_nodes = {(structural_path_element(d['current']).upper(), d['current'])
-                         for d in patterns if d['type'] == 'delete'}
+        deleted_nodes = {d['current'] for d in patterns if d['type'] == 'delete'}
 
         # Analyze insert operations
         for insert in patterns:
@@ -83,7 +122,7 @@ class ErrorAnnotation:
                     value = None
 
                 # Check if the node is also being removed elsewhere
-                if (node_type, insert['new']) not in deleted_nodes:
+                if insert['new'] not in deleted_nodes:
                     # Determine the missing construct
                     if node_type == "FOR":
                         missing_errors.append(("MISSING_FOR_LOOP", value, context_path))
@@ -142,8 +181,7 @@ class ErrorAnnotation:
             return element.split("[")[0]
 
         # Extract all insert nodes for comparison
-        inserted_nodes = {(structural_path_element(i['new']).upper(), i['new'])
-                          for i in patterns if i['type'] == 'insert'}
+        inserted_nodes = {i['new'] for i in patterns if i['type'] == 'insert'}
 
         # Analyze delete operations
         for delete in patterns:
@@ -161,7 +199,7 @@ class ErrorAnnotation:
                     value = None
 
                 # Check if the node is also being inserted elsewhere
-                if (node_type, delete['current']) not in inserted_nodes:
+                if delete['current'] not in inserted_nodes:
                     # Group broader categories
                     if node_type == "FOR":
                         unnecessary_errors.append(("UNNECESSARY_FOR_LOOP", value, context_path))
@@ -206,7 +244,6 @@ class ErrorAnnotation:
             list: A list of tuples in the format:
                   (incorrect_statement_position, value (or None), context_path)
         """
-        incorrect_positions = []
 
         # Helper function to remove indices from path elements
         def structural_path_element(element):
@@ -218,37 +255,38 @@ class ErrorAnnotation:
         inserted_nodes = {(structural_path_element(i['new']).upper(), i['new'].upper(), tuple(i['path']))
                           for i in patterns if i['type'] == 'insert'}
 
-        # Find overlapping nodes
-        for node_type, node_value, delete_path in deleted_nodes:
-            for insert_type, insert_value, insert_path in inserted_nodes:
-                if node_type == insert_value and node_value == insert_type:
-                    # Node exists in both delete and insert, indicating incorrect positioning
-                    context_path = " > ".join(structural_path_element(p) for p in delete_path)
+        incorrect_positions = []
+        kind_to_code = {
+            "FOR": "INCORRECT_STATEMENT_POSITION_FOR",
+            "WHILE": "INCORRECT_STATEMENT_POSITION_WHILE",
+            "IF": "INCORRECT_STATEMENT_POSITION_IF",
+            "CALL": "INCORRECT_STATEMENT_POSITION_CALL",
+            "ASSIGN": "INCORRECT_STATEMENT_POSITION_ASSIGN",
+            "FUNCTION": "INCORRECT_STATEMENT_POSITION_FUNCTION",
+            "RETURN": "INCORRECT_STATEMENT_POSITION_RETURN",
+        }
 
-                    # Handle cases where ":" is present
-                    if ":" in node_value:
-                        _, value = node_value.split(":", 1)
-                        value = value.strip()
-                    else:
-                        value = None
+        for del_type, del_value, del_path in deleted_nodes:
+            for ins_type, ins_value, ins_path in inserted_nodes:
+                # Compare like with like
+                if del_type == ins_type and del_value == ins_value:
+                    # Build context from the *deleted* path (as you had)
+                    context_path = " > ".join(structural_path_element(p) for p in del_path)
 
-                    # Determine the type of incorrect statement positioning
-                    if node_type == "FOR":
-                        incorrect_positions.append(("INCORRECT_STATEMENT_POSITION_FOR", value, context_path))
-                    elif node_type == "WHILE":
-                        incorrect_positions.append(("INCORRECT_STATEMENT_POSITION_WHILE", value, context_path))
-                    elif node_type == "IF":
-                        incorrect_positions.append(("INCORRECT_STATEMENT_POSITION_IF", value, context_path))
-                    elif node_type == "CALL":
-                        incorrect_positions.append(("INCORRECT_STATEMENT_POSITION_CALL", value, context_path))
-                    elif node_type == "ASSIGN":
-                        incorrect_positions.append(("INCORRECT_STATEMENT_POSITION_ASSIGN", value, context_path))
-                    elif node_type == "FUNCTION":
-                        incorrect_positions.append(("INCORRECT_STATEMENT_POSITION_FUNCTION", value, context_path))
-                    elif node_type == "RETURN":
-                        incorrect_positions.append(("INCORRECT_STATEMENT_POSITION_RETURN", value, context_path))
+                    # Extract base kind (e.g., "CALL" from "CALL: PRINT")
+                    base_kind = del_type.split(":", 1)[0].strip().upper()
 
-        return list(set(incorrect_positions))  # Remove duplicates
+                    # Extract human-readable value if present (e.g., "PRINT" or "'Finished ...'")
+                    value = None
+                    if ":" in del_value:
+                        value = del_value.split(":", 1)[1].strip()
+
+                    code = kind_to_code.get(base_kind)
+                    if code:
+                        incorrect_positions.append((code, value, " > ".join(structural_path_element(p) for p in ins_path)))
+
+        # Remove duplicates
+        return list(set(incorrect_positions))
 
     def track_all_updates(self, patterns):
         """

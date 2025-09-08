@@ -117,6 +117,7 @@ def get_typology_based_code_error(incorrect_code : str, correct_code_list: list[
     results = []
     for correct_code in correct_code_list:
         dist, primary_errors = get_primary_code_errors(incorrect_code, correct_code)
+        print(primary_errors)
         typology_based_error_tags = get_customized_error_tags(primary_errors)
         results.append([dist, typology_based_error_tags])
 

@@ -143,7 +143,7 @@ def distance(A, B, get_children):
                             op_type = 'update'
                         op = {
                             'type': op_type,
-                            'path': node1.get_path(),
+                            'path': node2.get_path(),
                             'current': node1.label,
                             'new': node2.label
                         }

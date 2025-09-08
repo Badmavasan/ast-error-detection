@@ -120,9 +120,14 @@ def get_customized_error_tags(input_list): # new version
         if len(error_details) not in (3, 4):
             continue
 
-        tag = error_details[0]
-        context = error_details[-1]
-        context2 = error_details[-2]
+        if len(error_details) == 3:
+            tag = error_details[0]
+            context = error_details[-1]
+            context2 = error_details[-2]
+        else:
+            tag = error_details[0]
+            context = error_details[-1]
+            context2 = error_details[-3]
 
         # ITERATION ERROR
         if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and "For > Condition: > Call: range > Const" in context:
@@ -139,6 +144,9 @@ def get_customized_error_tags(input_list): # new version
                 error_list.append(LO_WHILE_NUMBER_ITERATION_ERROR)
             else :
                 error_list.append(LO_WHILE_NUMBER_ITERATION_ERROR_UNDER2)
+
+        if ANNOTATION_TAG_INCORRECT_POSITION in tag and ANNOTATION_CONTEXT_FOR_LOOP_BODY in context:
+            error_list.append(LO_BODY_MISPLACED)
 
         # BODY MISSING
         if tag in ANNOTATION_TAG_INCORRECT_POSITION_LOOP :
@@ -192,6 +200,8 @@ def get_customized_error_tags(input_list): # new version
         """
 
         rules = [
+            (ANNOTATION_TAG_MISSING_CONST_VALUE, ANNOTATION_CONTEXT_FOR_LOOP_BODY),
+            (ANNOTATION_TAG_MISSING_CALL_STATEMENT, ANNOTATION_CONTEXT_FOR_LOOP_BODY ),
             (ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT, ANNOTATION_CONTEXT_FOR_LOOP_BODY),
             (ANNOTATION_TAG_CONST_VALUE_MISMATCH, ANNOTATION_CONTEXT_WHILE_LOOP_BODY),
             (ANNOTATION_TAG_INCORRECT_POSITION_ASSIGN, ANNOTATION_CONTEXT_FOR_LOOP_BODY),
@@ -200,6 +210,17 @@ def get_customized_error_tags(input_list): # new version
         for rule_tag, rule_context in rules:
             if tag == rule_tag and rule_context in context:
                 error_list.append(LO_BODY_ERROR)
+
+        FUNC_CALL_RX = re.compile(ANNOTATION_CONTEXT_FUNCTION_CALL)
+        INCORRECT_RX = re.compile(ANNOTATION_TAG_INCORRECT_POSITION_REGEX)
+        UNNECESSARY_RX = re.compile(ANNOTATION_TAG_UNNECESSARY_REGEX)
+        MISSING_RX = re.compile(ANNOTATION_TAG_MISSING_REGEX)
+
+        # Option A: explicit, very readable
+        if FUNC_CALL_RX.match(context) and all(
+                rx.match(tag) is None for rx in (INCORRECT_RX, UNNECESSARY_RX, MISSING_RX)
+        ):
+            error_list.append(F_CALL_ERROR)
 
         """
             TRANSLATION OF ABOVE CODE
