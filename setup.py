@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="asterrdetection",
-    version="0.4",
+    version="0.5",
     description="A package that identifies semantic errors in faulty code by comparing it against a set of expected correct code versions.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",

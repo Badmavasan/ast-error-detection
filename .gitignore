@@ -5,7 +5,7 @@ __pycache__/
 
 main.py
 
-
+test/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -126,8 +126,6 @@ venv.bak/
 
 # mkdocs documentation
 /site
-
-test/
 
 # mypy
 .mypy_cache/

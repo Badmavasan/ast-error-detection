@@ -12,7 +12,7 @@ from ast_error_detection.constants import *
 import re
 
 
-def process_tag_triplets(input_list, required_tags, match_start, match_end):
+def process_tag_triplets(input_list, required_tags, match_start, match_end, error):
     """
     Checks if all required_tags are present in the input_list (as first element in sublists).
     If so, extracts those sublists and compares the part of their third element from match_start to match_end.
@@ -56,7 +56,7 @@ def process_tag_triplets(input_list, required_tags, match_start, match_end):
     if all(seg == segments[0] and seg is not None for seg in segments):
         # If all segments are the same and not None, append EXP_ERR
         if match_start == ANNOTATION_CONTEXT_MODULE and match_end == ANNOTATION_CONTEXT_ASSIGN:
-            return VA_DECLARATION_INITIALIZATION_ERROR
+            return error
 
     return None
 
@@ -104,14 +104,27 @@ def get_customized_error_tags(input_list):  # new version
     """
     error_list = []
 
+    # Check for Missing Assignments
+    # An assignment is considered missing if the assignment operator, variable, and constant are all absent
+    # simultaneously within the same context.
+    # When this condition is met, the error code EXP_ERROR_ASSIGNMENT_MISSING is added to the error list.
+    missing_assignment_expression_error = process_tag_triplets(input_list,
+                                                               ANNOTATION_TAG_LIST_MISSING_EXPRESSION_ASSIGNMENT ,
+                                                               ANNOTATION_CONTEXT_MODULE, ANNOTATION_CONTEXT_ASSIGN,
+                                                               EXP_ERROR_ASSIGNMENT_MISSING)
+    if missing_assignment_expression_error is not None:
+        error_list.append(missing_assignment_expression_error)
 
-    for tag_list in [
-        ANNOTATION_TAG_LIST_VARIABLE_DECLARATION_MISSING,
-        ANNOTATION_TAG_LIST_VARIABLE_DECLARATION_UNNECESSARY
-    ]:
-        result = process_tag_triplets(input_list, tag_list, ANNOTATION_CONTEXT_MODULE, ANNOTATION_CONTEXT_ASSIGN)
-        if result is not None:
-            error_list.append(result)
+    # Check for Unnecessary Assignments
+    # An assignment is considered unnecessary if the assignment operator, variable, and constant
+    # are present simultaneously within the same context but not required within the current context.
+    # When this condition is met, the error code EXP_ERROR_ASSIGNMENT_UNNECESSARY is added to the error list.
+    unnecessary_assignment_expression_error = process_tag_triplets(input_list,
+                                                                   ANNOTATION_TAG_LIST_UNNECESSARY_EXPRESSION_ASSIGNMENT,
+                                                                   ANNOTATION_CONTEXT_MODULE, ANNOTATION_CONTEXT_ASSIGN,
+                                                                   EXP_ERROR_ASSIGNMENT_UNNECESSARY)
+    if unnecessary_assignment_expression_error is not None:
+        error_list.append(unnecessary_assignment_expression_error)
 
     for error_details in input_list:
         # Ensure the error detail has the expected number of elements; if not, skip it.
@@ -126,6 +139,115 @@ def get_customized_error_tags(input_list):  # new version
             tag = error_details[0]
             context = error_details[-1]
             context2 = error_details[-3]
+
+        # Check for Missing Function Calls
+        # The error code F_CALL_MISSING is added to the error list whenever a MISSING_CALL_STATEMENT
+        # tag is detected in the primary errors.
+        if tag == ANNOTATION_TAG_MISSING_CALL_STATEMENT:
+            # Check for Precise Missing Function Calls
+            # A precise error code is used when the missing call is identified as a native print function.
+            # If the missing call is specifically to the 'print' function, the error code
+            # F_CALL_MISSING_PRINT is added to the error list.
+            if re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT,context):
+                error_list.append(F_CALL_MISSING_PRINT)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER,context):
+                error_list.append(F_CALL_MISSING_AVANCER)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER, context):
+                error_list.append(F_CALL_MISSING_TOURNER)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_COULEUR, context):
+                error_list.append(F_CALL_MISSING_COULEUR)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_ARC, context):
+                error_list.append(F_CALL_MISSING_ARC)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_GAUCHE, context):
+                error_list.append(F_CALL_MISSING_GAUCHE)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT, context):
+                error_list.append(F_CALL_MISSING_HAUT)
+            else:
+                error_list.append(F_CALL_MISSING)
+
+        # Check for Unnecessary Function Calls
+        # The error code F_CALL_UNNECESSARY is added to the error list whenever an UNNECESSARY_CALL_STATEMENT
+        # tag is detected in the primary errors.
+        if tag == ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT:
+            # Check for Precise Unnecessary Function Calls
+            # A precise error code is used when the unnecessary call is identified as a native function.
+            # If the unnecessary call is specifically to the 'print' function, the error code
+            # F_CALL_UNNECESSARY_PRINT is added to the error list.
+            if context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_NODE_NAME or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT, context):
+                error_list.append(F_CALL_UNNECESSARY_PRINT)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER, context):
+                error_list.append(F_CALL_UNNECESSARY_AVANCER)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER, context):
+                error_list.append(F_CALL_UNNECESSARY_TOURNER)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_COULEUR, context):
+                error_list.append(F_CALL_UNNECESSARY_COULEUR)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_ARC, context):
+                error_list.append(F_CALL_UNNECESSARY_ARC)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_GAUCHE, context):
+                error_list.append(F_CALL_UNNECESSARY_GAUCHE)
+            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT, context):
+                error_list.append(F_CALL_UNNECESSARY_HAUT)
+            else:
+                error_list.append(F_CALL_UNNECESSARY)
+
+        # Check for Errors Inside Print Function Calls
+        # The error code F_CALL_PRINT_ERROR_ARG is added to the error list whenever an error is detected
+        # inside the arguments of a 'print' function call.
+        # The type of error originates from the primary errors and can be of any kind.
+        if tag not in F_CALL_PRINT_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_ARG, context):
+            error_list.append(F_CALL_PRINT_ERROR_ARG)
+
+        if tag not in F_CALL_DESIGN_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER_ARG, context):
+            error_list.append(F_CALL_AVANCER_ERROR)
+
+        if tag not in F_CALL_DESIGN_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER_ARG, context):
+            error_list.append(F_CALL_TOURNER_ERROR)
+
+        if tag not in F_CALL_DESIGN_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_COULEUR_ARG, context):
+            error_list.append(F_CALL_COULEUR_ERROR)
+
+        if tag not in F_CALL_DESIGN_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_ARC_ARG, context):
+            error_list.append(F_CALL_ARC_ERROR)
+
+        if tag not in F_CALL_ROBOT_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_GAUCHE_ARG, context):
+            error_list.append(F_CALL_GAUCHE_ERROR)
+
+        if tag not in F_CALL_ROBOT_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT_ARG, context):
+            error_list.append(F_CALL_HAUT_ERROR)
+
+        # Check for Errors Related to Invalid Operations
+        # The error code EXP_ERROR_OPERATION is added to the error list whenever an error is detected
+        # and the error context contains "Operation:".
+        # This indicates there is a problem with an operation, such as:
+        #   - Variable-to-variable operations (e.g., a + b)
+        #   - Literal-to-literal operations (e.g., 1 + 2)
+        #   - Mixed variable-literal operations (e.g., a + 1)
+        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and re.search(ANNOTATION_CONTEXT_OPERATION, context):
+            error_list.append(EXP_ERROR_OPERATION)
+
+        # Check for Incorrect Position of 'print' Function Calls
+        # The error code F_CALL_INCORRECT_POSITION_PRINT is added to the error list whenever
+        # the annotation tag indicates print is not called in the right position in the code
+        # and the error context matches a native 'print' function call.
+        # This ensures that misplaced 'print' calls are flagged separately from other call errors.
+        if tag == ANNOTATION_TAG_INCORRECT_POSITION_CALL and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT, context):
+            error_list.append(F_CALL_INCORRECT_POSITION_PRINT)
+
+        if tag == ANNOTATION_TAG_INCORRECT_POSITION_ASSIGN:
+            error_list.append(EXP_ERROR_ASSIGNMENT_MISPLACED)
+
+        if tag == ANNOTATION_TAG_INCORRECT_POSITION_FOR:
+            error_list.append(LO_FOR_MISPLACED)
+
+        if tag == ANNOTATION_TAG_UNNECESSARY_FOR_LOOP and (re.search(ANNOTATION_CONTEXT_FOR_LOOP, context) or context2.split(" ")[-1] == ANNOTATION_CONTEXT_FOR_NODE_NAME):
+            error_list.append(LO_FOR_UNNECESSARY)
+
+        if tag == ANNOTATION_TAG_UNNECESSARY_WHILE_LOOP and (re.search(ANNOTATION_CONTEXT_WHILE_LOOP, context) or context2.split(" ")[-1] == ANNOTATION_CONTEXT_WHILE_NODE_NAME):
+            error_list.append(LO_WHILE_UNNECESSARY)
+
+        if tag == ANNOTATION_TAG_UNNECESSARY_FUNCTION_DEFINITION:
+            error_list.append(F_DEFINITION_UNNECESSARY)
+
 
         # ITERATION ERROR
         if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and "For > Condition: > Call: range > Const" in context:
@@ -147,7 +269,7 @@ def get_customized_error_tags(input_list):  # new version
             error_list.append(LO_BODY_MISPLACED)
 
         # BODY MISSING
-        if tag in ANNOTATION_TAG_INCORRECT_POSITION_LOOP:
+        if "INCORRECT_STATEMENT_POSITION" in tag and ANNOTATION_CONTEXT_FOR_LOOP_BODY in context:
             error_list.append(LO_BODY_MISPLACED)
         if ANNOTATION_TAG_MISSING in tag and (
                 ANNOTATION_CONTEXT_FOR_LOOP_BODY in context or ANNOTATION_CONTEXT_WHILE_LOOP_BODY in context):
@@ -178,13 +300,15 @@ def get_customized_error_tags(input_list):  # new version
         if tag == ANNOTATION_TAG_INCORRECT_POSITION_CS:
             error_list.append(CS_BODY_MISPLACED)
 
-        # VAR : error 1 : Initialization
-        if tag == VAR_CONST_MISMATCH and ANNOTATION_CONTEXT_VAR in context:
+        # Error : VA_DECLARATION_INITIALIZATION_ERROR
+        # Check for Variable Initialization Errors
+        # The error code VA_DECLARATION_INITIALIZATION_ERROR is added to the error list whenever
+        # the annotation tag indicates a constant mismatch (CONST_VALUE_MISMATCH)
+        # and the error context matches a variable declaration (ANNOTATION_CONTEXT_VAR).
+        # This occurs when a variable is initialized with a value,
+        # but the value used for initialization is incorrect.
+        if tag == VAR_CONST_MISMATCH and re.search(ANNOTATION_CONTEXT_VAR, context):
             error_list.append(VA_DECLARATION_INITIALIZATION_ERROR)
-
-        # FONCTION : error 1 : definition error arg
-        if tag == ANNOTATION_TAG_MISSING_ARGUMENT or tag == ANNOTATION_TAG_UNNECESSARY_ARGUMENT:
-            error_list.append(F_DEFINITION_ERROR_ARG)
 
         # FUNCTION : error 2 : definition error return
         if tag == ANNOTATION_TAG_MISSING_RETURN or tag == ANNOTATION_TAG_UNNECESSARY_RETURN or (
@@ -195,14 +319,7 @@ def get_customized_error_tags(input_list):  # new version
         if tag == ANNOTATION_TAG_INCORRECT_OPERATION_IN_COMP and ANNOTATION_CONTEXT_CS_CONDITION in context:
             error_list.append(EXP_ERROR_CONDITIONAL_BRANCH)
 
-        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and re.search(ANNOTATION_CONTEXT_FUNCTION_PARAMETER, context):
-            error_list.append(F_DEFINITION_ERROR_ARG)
 
-        if tag == ANNOTATION_TAG_MISSING_CALL_INSTRUCTION:
-            error_list.append(F_CALL_MISSING)
-
-        if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and re.search(ANNOTATION_CONTEXT_FUNCTION_CALL_UPDATE, context):
-            error_list.append(F_CALL_MISSING)
 
         """
             SPECIFIC CODE SECTION
@@ -220,33 +337,24 @@ def get_customized_error_tags(input_list):  # new version
             if tag == rule_tag and rule_context in context:
                 error_list.append(LO_BODY_ERROR)
 
-
-        FUNC_CALL_RX = re.compile(ANNOTATION_CONTEXT_FUNCTION_CALL)
-        INCORRECT_RX = re.compile(ANNOTATION_TAG_INCORRECT_POSITION_REGEX)
-        UNNECESSARY_RX = re.compile(ANNOTATION_TAG_UNNECESSARY_REGEX)
-        MISSING_RX = re.compile(ANNOTATION_TAG_MISSING_REGEX)
-
-        # Option A: explicit, very readable
-        if FUNC_CALL_RX.match(context) and all(
-                rx.match(tag) is None for rx in (INCORRECT_RX, UNNECESSARY_RX, MISSING_RX)
-        ):
-            error_list.append(F_CALL_ERROR)
-
-        if tag == ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT and ANNOTATION_CONTEXT_UNNECESSARY_FUNCTION_CALL in context:
-            error_list.append(F_UNNECESSARY_FUNCTION_CALL)
-
         """
             TRANSLATION OF ABOVE CODE
-    
+
             if tag == ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT and ANNOTATION_CONTEXT_FOR_LOOP_BODY in context:
                 error_list.append(LO_BODY_ERROR)
-    
+
             if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and ANNOTATION_CONTEXT_WHILE_LOOP_BODY in context:
                 error_list.append(LO_BODY_ERROR)
-    
+
             if tag == ANNOTATION_TAG_INCORRECT_POSITION_ASSIGN and ANNOTATION_CONTEXT_FOR_LOOP_BODY in context :
                 error_list.append(LO_BODY_ERROR)
         """
+
+
+
+
+
+
 
         '''
         # Rule 4: Tag contains "MISSING".
@@ -257,4 +365,5 @@ def get_customized_error_tags(input_list):  # new version
         if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and pattern_value_parameter.search(context):
             error_list.append(ERROR_VALUE_PARAMETER)
         '''
+
     return set(error_list)
