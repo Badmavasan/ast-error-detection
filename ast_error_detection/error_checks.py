@@ -148,20 +148,28 @@ def get_customized_error_tags(input_list):  # new version
             # A precise error code is used when the missing call is identified as a native print function.
             # If the missing call is specifically to the 'print' function, the error code
             # F_CALL_MISSING_PRINT is added to the error list.
-            if re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT,context):
+            if context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_NODE_NAME:
                 error_list.append(F_CALL_MISSING_PRINT)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER,context):
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER_NODE_NAME:
                 error_list.append(F_CALL_MISSING_AVANCER)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER, context):
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER_NODE_NAME:
                 error_list.append(F_CALL_MISSING_TOURNER)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_COULEUR, context):
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_COULEUR_NODE_NAME:
                 error_list.append(F_CALL_MISSING_COULEUR)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_ARC, context):
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_ARC_NODE_NAME:
                 error_list.append(F_CALL_MISSING_ARC)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_GAUCHE, context):
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_GAUCHE_NODE_NAME:
                 error_list.append(F_CALL_MISSING_GAUCHE)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT, context):
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT_NODE_NAME:
                 error_list.append(F_CALL_MISSING_HAUT)
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_BAS_NODE_NAME:
+                error_list.append(F_CALL_MISSING_BAS)
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_DROITE_NODE_NAME:
+                error_list.append(F_CALL_MISSING_DROITE)
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_POSER_NODE_NAME:
+                error_list.append(F_CALL_MISSING_POSER)
+            elif context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_LEVER_NODE_NAME:
+                error_list.append(F_CALL_MISSING_LEVER)
             else:
                 error_list.append(F_CALL_MISSING)
 
@@ -173,20 +181,39 @@ def get_customized_error_tags(input_list):  # new version
             # A precise error code is used when the unnecessary call is identified as a native function.
             # If the unnecessary call is specifically to the 'print' function, the error code
             # F_CALL_UNNECESSARY_PRINT is added to the error list.
-            if context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_NODE_NAME or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT, context):
+            if (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_NODE_NAME
+                    or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT, context)):
                 error_list.append(F_CALL_UNNECESSARY_PRINT)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER, context):
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER, context)):
                 error_list.append(F_CALL_UNNECESSARY_AVANCER)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER, context):
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER, context)):
                 error_list.append(F_CALL_UNNECESSARY_TOURNER)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_COULEUR, context):
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_COULEUR_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_COULEUR, context)):
                 error_list.append(F_CALL_UNNECESSARY_COULEUR)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_ARC, context):
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_ARC_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_ARC, context)):
                 error_list.append(F_CALL_UNNECESSARY_ARC)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_GAUCHE, context):
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_GAUCHE_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_GAUCHE, context)):
                 error_list.append(F_CALL_UNNECESSARY_GAUCHE)
-            elif re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT, context):
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT, context)):
                 error_list.append(F_CALL_UNNECESSARY_HAUT)
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_DROITE_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_DROITE, context)):
+                error_list.append(F_CALL_UNNECESSARY_DROITE)
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_BAS_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_BAS, context)):
+                error_list.append(F_CALL_UNNECESSARY_BAS)
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_LEVER_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_LEVER, context)):
+                error_list.append(F_CALL_UNNECESSARY_LEVER)
+            elif (context2.split(" ")[-1] == ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_POSER_NODE_NAME
+                  or re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_POSER, context)):
+                error_list.append(F_CALL_UNNECESSARY_POSER)
             else:
                 error_list.append(F_CALL_UNNECESSARY)
 
@@ -214,6 +241,12 @@ def get_customized_error_tags(input_list):  # new version
 
         if tag not in F_CALL_ROBOT_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT_ARG, context):
             error_list.append(F_CALL_HAUT_ERROR)
+
+        if tag not in F_CALL_ROBOT_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_DROITE_ARG, context):
+            error_list.append(F_CALL_DROITE_ERROR)
+
+        if tag not in F_CALL_ROBOT_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_BAS_ARG, context):
+            error_list.append(F_CALL_BAS_ERROR)
 
         # Check for Errors Related to Invalid Operations
         # The error code EXP_ERROR_OPERATION is added to the error list whenever an error is detected
@@ -349,12 +382,6 @@ def get_customized_error_tags(input_list):  # new version
             if tag == ANNOTATION_TAG_INCORRECT_POSITION_ASSIGN and ANNOTATION_CONTEXT_FOR_LOOP_BODY in context :
                 error_list.append(LO_BODY_ERROR)
         """
-
-
-
-
-
-
 
         '''
         # Rule 4: Tag contains "MISSING".

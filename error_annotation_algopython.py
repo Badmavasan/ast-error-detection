@@ -36,9 +36,9 @@ def annotate_exercises(meta_file: str, exercise_ids: Iterable[int]):
     correct_index = _build_correct_codes_index(meta_file)
 
     for ex_id in exercise_ids:
-        input_file = f"data/serieC/tentatives_exercise_{ex_id}.json"
-        typology_errors_output_file = f"annotations/serieC/typology_annotations_{ex_id}.json"
-        primary_errors_output_file = f"annotations/serieC/primary_annotations_{ex_id}.json"
+        input_file = f"data/serieA/tentatives_exercise_{ex_id}.json"
+        typology_errors_output_file = f"annotations/serieA/typology_annotations_{ex_id}.json"
+        primary_errors_output_file = f"annotations/serieA/primary_annotations_{ex_id}.json"
 
         # Load submissions
         try:
@@ -97,5 +97,5 @@ def annotate_exercises(meta_file: str, exercise_ids: Iterable[int]):
 
 annotate_exercises(
      meta_file="exercises.json",  # the file that has exerciseId + correctCodes
-     exercise_ids=[87]
+     exercise_ids=[76]
 )
