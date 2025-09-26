@@ -15,7 +15,7 @@ from ast_error_detection.constants import ANNOTATION_TAG_CONST_VALUE_MISMATCH, \
     F_CALL_UNNECESSARY_TOURNER, ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_NODE_NAME, \
     ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER_NODE_NAME, \
     ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER_NODE_NAME, ANNOTATION_TAG_UNNECESSARY_FOR_LOOP, \
-    ANNOTATION_TAG_UNNECESSARY_WHILE_LOOP
+    ANNOTATION_TAG_UNNECESSARY_WHILE_LOOP, ANNOTATION_TAG_MISSING_FOR_LOOP
 import re
 
 ### HIGH LEVEL RULES ##
@@ -131,6 +131,41 @@ def rule_remove_inside_missing_call_context():
 
     return rule
 
+def rule_remove_inside_missing_for_loop():
+    def rule(errors):
+        # Collect exact contexts where a missing for-loop is flagged
+        # e.g., "Module > For" or "FunctionDef: foo > For"
+        trigger_contexts = {
+            (e[-1] or "").strip()
+            for e in errors
+            if e[0] == ANNOTATION_TAG_MISSING_FOR_LOOP
+        }
+
+        if not trigger_contexts:
+            return errors
+
+        filtered = []
+        for e in errors:
+            code = e[0]
+            ctx  = (e[-1] or "").strip()
+
+            # Always keep the trigger(s) themselves
+            if code == ANNOTATION_TAG_MISSING_FOR_LOOP:
+                filtered.append(e)
+                continue
+
+            # Drop errors that are strictly *under* a trigger "for" context:
+            # i.e., context starts with "<trigger> >"
+            if any(ctx.startswith(tc + " > ") for tc in trigger_contexts):
+                continue
+
+            # Everything else stays
+            filtered.append(e)
+
+        return filtered
+
+    return rule
+
 
 def high_level_filtering():
     """
@@ -142,7 +177,8 @@ def high_level_filtering():
     rules = [
         rule_remove_inside_unnecessary_call_context(),
         rule_remove_inside_missing_call_context(),
-        rule_remove_inside_unnecessary_loop_context()
+        rule_remove_inside_unnecessary_loop_context(),
+        rule_remove_inside_missing_for_loop()
     ]
 
     def apply_rules(errors):

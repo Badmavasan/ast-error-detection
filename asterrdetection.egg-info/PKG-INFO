@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: asterrdetection
-Version: 0.5
+Version: 0.6
 Summary: A package that identifies semantic errors in faulty code by comparing it against a set of expected correct code versions.
 Home-page: https://github.com/Badmavasan/ast-error-detection
 Author: Badmavasan KIROUCHENASSAMY

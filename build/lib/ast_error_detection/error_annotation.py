@@ -8,7 +8,149 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 from ast_error_detection.constants import ANNOTATION_TAG_CONST_VALUE_MISMATCH, \
-    ANNOTATION_TAG_INCORRECT_OPERATION_IN_COMP, ANNOTATION_TAG_INCORRECT_OPERATION_IN_ASSIGN
+    ANNOTATION_TAG_INCORRECT_OPERATION_IN_COMP, ANNOTATION_TAG_INCORRECT_OPERATION_IN_ASSIGN, \
+    ANNOTATION_CONTEXT_RANGE_FUNCTION_CALL, ANNOTATION_TAG_MISSING_CALL_STATEMENT, \
+    ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT, ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT, \
+    ANNOTATION_CONTEXT_FUNCTION_CALL_NODE, F_CALL_UNNECESSARY_PRINT, F_CALL_UNNECESSARY_AVANCER, \
+    F_CALL_UNNECESSARY_TOURNER, ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_NODE_NAME, \
+    ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER_NODE_NAME, \
+    ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER_NODE_NAME, ANNOTATION_TAG_UNNECESSARY_FOR_LOOP, \
+    ANNOTATION_TAG_UNNECESSARY_WHILE_LOOP
+import re
+
+### HIGH LEVEL RULES ##
+
+# Rule: If there is an UNNECESSARY CALL statement, suppress ALL other errors
+# that are *inside* that call's context (i.e., deeper in the same path).
+# Keep the UNNECESSARY_CALL_STATEMENT trigger itself.
+def rule_remove_inside_unnecessary_call_context():
+    def rule(errors):
+        # Collect exact contexts where an unnecessary call is flagged
+        # Example context: "Module > Expr > Call: print"
+        trigger_contexts = {
+            (e[-1] or "").strip()
+            for e in errors
+            if e[0] == ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT
+        }
+
+        if not trigger_contexts:
+            return errors
+        filtered = []
+
+        for e in errors:
+            code = e[0]
+            ctx  = (e[-1] or "").strip()
+            # Always keep the trigger(s) themselves
+            if code == ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT:
+                filtered.append(e)
+                continue
+            # Drop errors that are strictly *under* a trigger call context:
+            # i.e., context starts with "<trigger> >"
+            if any(ctx.startswith(tc + " > ") for tc in trigger_contexts):
+                continue
+            # Everything else stays
+            filtered.append(e)
+        return filtered
+
+    return rule
+
+# Rule: If there is an UNNECESSARY FOR loop, suppress ALL other errors
+# that are *inside* that FOR's context (i.e., deeper in the same path).
+# Keep the UNNECESSARY_FOR_LOOP trigger itself.
+def rule_remove_inside_unnecessary_loop_context():
+    def rule(errors):
+        # Collect exact contexts where an unnecessary FOR is flagged
+        # Example context: "Module > For[0]"
+        trigger_contexts = {
+            (e[-1] or "").strip()
+            for e in errors
+            if e[0] == ANNOTATION_TAG_UNNECESSARY_FOR_LOOP or e[0] == ANNOTATION_TAG_UNNECESSARY_WHILE_LOOP
+        }
+
+        if not trigger_contexts:
+            return errors
+
+        filtered = []
+        for e in errors:
+            code = e[0]
+            ctx  = (e[-1] or "").strip()
+
+            # Always keep the trigger(s) themselves
+            if code == ANNOTATION_TAG_UNNECESSARY_FOR_LOOP or code == ANNOTATION_TAG_UNNECESSARY_WHILE_LOOP:
+                filtered.append(e)
+                continue
+
+            # Drop errors that are strictly *under* a trigger FOR context:
+            # i.e., context starts with "<trigger> >"
+            if any(ctx.startswith(tc + " > ") for tc in trigger_contexts):
+                continue
+
+            # Everything else stays
+            filtered.append(e)
+
+        return filtered
+
+    return rule
+
+
+# Rule: If there is a MISSING CALL statement, suppress ALL other errors
+# that are *inside* that call's context (i.e., deeper in the same path).
+# Keep the MISSING_CALL_STATEMENT trigger itself.
+def rule_remove_inside_missing_call_context():
+    def rule(errors):
+        # Collect exact contexts where a missing call is flagged
+        # Example context: "Module > Expr > Call: print"
+        trigger_contexts = {
+            (e[-1] or "").strip()
+            for e in errors
+            if e[0] == ANNOTATION_TAG_MISSING_CALL_STATEMENT
+        }
+
+        if not trigger_contexts:
+            return errors
+
+        filtered = []
+        for e in errors:
+            code = e[0]
+            ctx  = (e[-1] or "").strip()
+
+            # Always keep the trigger(s) themselves
+            if code == ANNOTATION_TAG_MISSING_CALL_STATEMENT:
+                filtered.append(e)
+                continue
+
+            # Drop errors that are strictly *under* a trigger call context:
+            # i.e., context starts with "<trigger> >"
+            if any(ctx.startswith(tc + " > ") for tc in trigger_contexts):
+                continue
+
+            # Everything else stays
+            filtered.append(e)
+
+        return filtered
+
+    return rule
+
+
+def high_level_filtering():
+    """
+    Returns a function that applies a pipeline of rules to an error list.
+    Default rules include:
+        - Removing all 'Call: range' errors if a MISSING_CALL_STATEMENT
+          on 'Call: range' is present.
+    """
+    rules = [
+        rule_remove_inside_unnecessary_call_context(),
+        rule_remove_inside_missing_call_context(),
+        rule_remove_inside_unnecessary_loop_context()
+    ]
+
+    def apply_rules(errors):
+        for rule in rules:
+            errors = rule(errors)
+        return errors
+
+    return apply_rules
 
 
 class ErrorAnnotation:
@@ -25,51 +167,13 @@ class ErrorAnnotation:
             list: A combined list of tuples from all error detection functions.
         """
 
-        # --------- helpers (KEEP indices) ----------
-        def node_type_of_label(label: str) -> str:
-            # 'Var: i' -> 'VAR' | 'For' -> 'FOR' | 'Call: range' -> 'CALL'
-            base = (label or "").split("[")[0]
-            return base.split(":", 1)[0].strip().upper()
-
-        def is_for_insert(p) -> bool:
-            return p.get("type") == "insert" and node_type_of_label(p.get("new", "")) == "FOR"
-
-        def starts_with_prefix(path_elems, prefix_elems) -> bool:
-            if len(path_elems) < len(prefix_elems):
-                return False
-            for a, b in zip(path_elems, prefix_elems):
-                if a != b:  # exact match, indices included
-                    return False
-            return True
-
-        def under_any(anchor_set, path_elems) -> bool:
-            pe = tuple(path_elems)
-            return any(starts_with_prefix(pe, anc) for anc in anchor_set)
-
-        # --------- anchor the inserted/missing FORs ----------
-        insert_for_anchors = {tuple(p["path"]) for p in patterns if is_for_insert(p)}
-
-        # --------- filter patterns: suppress ONLY inside inserted FOR subtrees ----------
-        filtered_patterns = []
-        for p in patterns:
-            p_path = tuple(p.get("path", ()))
-
-            if under_any(insert_for_anchors, p_path):
-                # Keep only the exact FOR insert at its anchor path.
-                if is_for_insert(p) and p_path in insert_for_anchors:
-                    filtered_patterns.append(p)
-                # else: drop anything else (updates/inserts/deletes) inside that missing FOR subtree
-                continue
-
-            # No suppression for other/moved/existing FORs.
-            filtered_patterns.append(p)
-
         # Call individual detection functions
-        missing_statements = self.detect_specific_missing_constructs(filtered_patterns)
-        unnecessary_deletions = self.detect_unnecessary_deletions(filtered_patterns)
-        incorrect_positions = self.detect_incorrect_statement_positions(filtered_patterns)
-        updates = self.track_all_updates(filtered_patterns)
-        variable_mismatches = self.detect_variable_mismatches(filtered_patterns)
+        missing_statements = self.detect_specific_missing_constructs(patterns)
+        unnecessary_deletions = self.detect_unnecessary_deletions(patterns)
+        incorrect_positions = self.detect_incorrect_statement_positions(patterns)
+        updates = self.track_all_updates(patterns)
+        variable_mismatches = self.detect_variable_mismatches(patterns)
+
 
         # Combine all errors into one list
         all_errors = []
@@ -78,8 +182,11 @@ class ErrorAnnotation:
         all_errors.extend(incorrect_positions)
         all_errors.extend(updates)
         all_errors.extend(variable_mismatches)
+        # High Level filtering
+        error_filter = high_level_filtering()
+        filtered = error_filter(all_errors)
 
-        return all_errors
+        return filtered
 
     def detect_specific_missing_constructs(self, patterns):
         """
@@ -102,12 +209,14 @@ class ErrorAnnotation:
         """
         missing_errors = []
 
+
         # Helper function to remove indices from path elements
         def structural_path_element(element):
             return element.split("[")[0]
 
         # Extract all delete nodes for comparison
         deleted_nodes = {d['current'] for d in patterns if d['type'] == 'delete'}
+        updated_nodes = {u['current'] for u in patterns if u['type'] == 'update'}
 
         # Analyze insert operations
         for insert in patterns:
@@ -125,30 +234,30 @@ class ErrorAnnotation:
                     value = None
 
                 # Check if the node is also being removed elsewhere
-                if insert['new'] not in deleted_nodes:
+                if insert['new'] not in deleted_nodes and insert['new'] not in updated_nodes:
                     # Determine the missing construct
                     if node_type == "FOR":
-                        missing_errors.append(("MISSING_FOR_LOOP", value, context_path))
+                        missing_errors.append(("MISSING_FOR_LOOP", insert['new'], context_path))
                     elif node_type == "WHILE":
-                        missing_errors.append(("MISSING_WHILE_LOOP", value, context_path))
+                        missing_errors.append(("MISSING_WHILE_LOOP", insert['new'], context_path))
                     elif node_type == "CALL":
-                        missing_errors.append(("MISSING_CALL_INSTRUCTION", value, context_path))
+                        missing_errors.append(("MISSING_CALL_STATEMENT", insert['new'], context_path))
                     elif node_type == "IF":
-                        missing_errors.append(("MISSING_IF_STATEMENT", value, context_path))
+                        missing_errors.append(("MISSING_IF_STATEMENT", insert['new'], context_path))
                     elif node_type == "ASSIGN":
-                        missing_errors.append(("MISSING_ASSIGN_STATEMENT", value, context_path))
+                        missing_errors.append(("MISSING_ASSIGN_STATEMENT", insert['new'], context_path))
                     elif node_type == "FUNCTION":
-                        missing_errors.append(("MISSING_FUNCTION_DEFINITION", value, context_path))
+                        missing_errors.append(("MISSING_FUNCTION_DEFINITION", insert['new'], context_path))
                     elif node_type == "RETURN":
-                        missing_errors.append(("MISSING_RETURN", value, context_path))
+                        missing_errors.append(("MISSING_RETURN", insert['new'], context_path))
                     elif node_type == "CONST":
-                        missing_errors.append(("MISSING_CONST_VALUE", value, context_path))
+                        missing_errors.append(("MISSING_CONST_VALUE", insert['new'], context_path))
                     elif node_type == "OPERATION":
-                        missing_errors.append(("MISSING_OPERATION", value, context_path))
+                        missing_errors.append(("MISSING_OPERATION", insert['new'], context_path))
                     elif node_type == "ARG":
-                        missing_errors.append(("MISSING_ARGUMENT", value, context_path))
+                        missing_errors.append(("MISSING_ARGUMENT", insert['new'], context_path))
                     elif node_type == "VAR":
-                        missing_errors.append(("MISSING_VARIABLE", value, context_path))
+                        missing_errors.append(("MISSING_VARIABLE", insert['new'], context_path))
 
         return list(set(missing_errors))  # Remove duplicates
 
@@ -231,32 +340,50 @@ class ErrorAnnotation:
 
     def detect_incorrect_statement_positions(self, patterns):
         """
-        Detect nodes that are both deleted and inserted elsewhere, indicating incorrect statement positioning.
+        Detect nodes that are deleted and re-appear elsewhere (inserted/updated),
+        inserted where they previously existed elsewhere (insert+update),
+        or updated in multiple places (simultaneous updates) — all indicating
+        incorrect statement positioning.
 
-        The detection focuses on node types like "Assign", "For", "While", "Call", "If", "Function",
-        and "Return". Each result includes:
-        - The incorrect statement position type.
-        - The value (if present) extracted from the node type after a ":".
-        - The context (path) where the incorrect positioning occurs.
+        Covered node kinds: "Assign", "For", "While", "Call", "If", "Function",
+        and "Return".
 
-        Args:
-            patterns (list): A list of dictionaries containing the type of operation,
-                             path, current value, and new value for transformations.
-
-        Returns:
-            list: A list of tuples in the format:
-                  (incorrect_statement_position, value (or None), context_path)
+        Returns a list of tuples:
+          (incorrect_statement_position_code, value_or_None, context_path)
+        where `context_path` points to the *new/target* location (the insert/update).
         """
 
-        # Helper function to remove indices from path elements
+        # ---- helper: strip indices from a single path element ----
         def structural_path_element(element):
             return element.split("[")[0]
 
-        # Extract delete and insert nodes
-        deleted_nodes = {(structural_path_element(d['current']).upper(), d['current'].upper(), tuple(d['path']))
-                         for d in patterns if d['type'] == 'delete'}
-        inserted_nodes = {(structural_path_element(i['new']).upper(), i['new'].upper(), tuple(i['path']))
-                          for i in patterns if i['type'] == 'insert'}
+        # ---- helper: derive a normalized "kind" (e.g., 'CALL', 'FOR') from a label ----
+        # e.g., 'Call: print' -> 'CALL', 'For' -> 'FOR', 'Var: i' -> 'VAR'
+        def node_kind(label):
+            base = (label or "").split("[")[0]
+            return base.split(":", 1)[0].strip().upper()
+
+        # ---- helper: extract human-readable value after ":" if it exists ----
+        # e.g., 'CALL: PRINT' -> 'PRINT', 'ASSIGN: X' -> 'X'
+        def extract_value(label):
+            if ":" in label:
+                return label.split(":", 1)[1].strip()
+            return None
+
+        # Build sets of (KIND, FULL_LABEL_UPPER, PATH_TUPLE)
+        deleted_nodes = {
+            (node_kind(d['current']), (d['current'] or "").upper(), tuple(d['path']))
+            for d in patterns if d['type'] == 'delete'
+        }
+        inserted_nodes = {
+            (node_kind(i['new']), (i['new'] or "").upper(), tuple(i['path']))
+            for i in patterns if i['type'] == 'insert'
+        }
+        # For updates we key by the *new* label (where the node ended up)
+        updated_nodes = {
+            (node_kind(u['new']), (u['new'] or "").upper(), tuple(u['path']))
+            for u in patterns if u['type'] == 'update'
+        }
 
         incorrect_positions = []
         kind_to_code = {
@@ -269,26 +396,27 @@ class ErrorAnnotation:
             "RETURN": "INCORRECT_STATEMENT_POSITION_RETURN",
         }
 
-        for del_type, del_value, del_path in deleted_nodes:
-            for ins_type, ins_value, ins_path in inserted_nodes:
-                # Compare like with like
-                if del_type == ins_type and del_value == ins_value:
-                    # Build context from the *deleted* path (as you had)
-                    context_path = " > ".join(structural_path_element(p) for p in del_path)
+        # ---- helper: append a detection result given (kind, label, target_path) ----
+        def append_result(kind, label_upper, target_path_tuple):
+            base_kind = kind.split(":", 1)[0].strip().upper()  # kind is already normalized (CALL/FOR/…)
+            code = kind_to_code.get(base_kind)
+            if not code:
+                return
+            value = extract_value(label_upper)  # human-readable value (after ':') or None
+            context_path = " > ".join(structural_path_element(p) for p in target_path_tuple)
+            incorrect_positions.append((code, value, context_path))
 
-                    # Extract base kind (e.g., "CALL" from "CALL: PRINT")
-                    base_kind = del_type.split(":", 1)[0].strip().upper()
+        # ------------------------------------------------------------
+        # 1) DELETE + INSERT (existing behavior): node reappears elsewhere
+        #    Compare like-with-like by (KIND, FULL_LABEL_UPPER)
+        #    Report context at the *insert* location.
+        # ------------------------------------------------------------
+        for del_kind, del_label, del_path in deleted_nodes:
+            for ins_kind, ins_label, ins_path in inserted_nodes:
+                if del_kind == ins_kind and del_label == ins_label:
+                    append_result(del_kind, del_label, ins_path)
 
-                    # Extract human-readable value if present (e.g., "PRINT" or "'Finished ...'")
-                    value = None
-                    if ":" in del_value:
-                        value = del_value.split(":", 1)[1].strip()
-
-                    code = kind_to_code.get(base_kind)
-                    if code:
-                        incorrect_positions.append((code, value, " > ".join(structural_path_element(p) for p in ins_path)))
-
-        # Remove duplicates
+        # Deduplicate results
         return list(set(incorrect_positions))
 
     def track_all_updates(self, patterns):
@@ -312,9 +440,30 @@ class ErrorAnnotation:
         """
         updates = []
 
+        def _node_kind(label):
+            base = (label or "").split("[")[0]
+            return base.split(":", 1)[0].strip().upper()
+
         # Helper function to remove indices from path elements
         def structural_path_element(element):
             return element.split("[")[0]
+
+        call_token = re.compile(ANNOTATION_CONTEXT_FUNCTION_CALL_NODE, re.IGNORECASE)
+
+        _unnecessary_map = {
+            "FOR": "UNNECESSARY_FOR_LOOP",
+            "WHILE": "UNNECESSARY_WHILE_LOOP",
+            "IF": "UNNECESSARY_IF_STATEMENT",
+            "CALL": ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT,  # keep your existing constant
+            "ASSIGN": "UNNECESSARY_ASSIGN_STATEMENT",
+            "FUNCTIONDEF": "UNNECESSARY_FUNCTION_DEFINITION",
+            "RETURN": "UNNECESSARY_RETURN",
+            "CONST": "UNNECESSARY_CONST_VALUE",
+            "OPERATION": "UNNECESSARY_OPERATION",
+            "ARGUMENT": "UNNECESSARY_ARGUMENT",
+            "VAR": "UNNECESSARY_VARIABLE",
+        }
+
 
         # Analyze update operations
         for update in patterns:
@@ -325,9 +474,26 @@ class ErrorAnnotation:
                 current_value = update['current']
                 new_value = update['new']
 
-                if "CALL" in node_type:
-                    updates.append((ANNOTATION_TAG_CONST_VALUE_MISMATCH, current_value, new_value, context_path))
-                elif "COMPARE" in node_type:
+                cur_kind = _node_kind(current_value)
+                new_kind = _node_kind(new_value)
+
+                if cur_kind in _unnecessary_map and new_kind and current_value != new_value:
+                    updates.append((_unnecessary_map[cur_kind], current_value, new_value, context_path))
+
+                # Handle "missing construct" cases based on the new node type
+                if new_kind in (
+                "FOR", "WHILE", "IF", "CALL", "ASSIGN", "FUNCTIONDEF", "RETURN", "ARGUMENT"):
+                    missing_map = {
+                        "FOR": "MISSING_FOR_LOOP",
+                        "WHILE": "MISSING_WHILE_LOOP",
+                        "IF": "MISSING_IF_STATEMENT",
+                        "CALL": "MISSING_CALL_STATEMENT",
+                        "ASSIGN": "MISSING_ASSIGN_STATEMENT",
+                    }
+                    updates.append((missing_map[new_kind], new_value, context_path))
+
+
+                if "COMPARE" in node_type:
                     updates.append((ANNOTATION_TAG_INCORRECT_OPERATION_IN_COMP, current_value, new_value, context_path))
                 elif "OPERATION" in node_type:
                     updates.append((ANNOTATION_TAG_INCORRECT_OPERATION_IN_ASSIGN, current_value, new_value, context_path))
@@ -365,11 +531,11 @@ class ErrorAnnotation:
             if pattern['type'] == 'update':
 
                 # Handle cases where ":" is present
-                if ":" in pattern['current']:
+                if ": " in pattern['current']:
                     # The space is important here as in the label of the Var node its 'Var: i'
                     cur_node_type, cur_var_value = pattern['current'].split(": ", 1)
 
-                    if ":" in pattern['new']:
+                    if ": " in pattern['new']:
                         new_node_type, new_var_value = pattern['new'].split(": ", 1)
 
                         # Check if the last element is a Var node
@@ -391,3 +557,6 @@ class ErrorAnnotation:
                     mismatches.append(("VARIABLE_MISMATCH", var_name, context_path))
 
         return mismatches
+
+
+
