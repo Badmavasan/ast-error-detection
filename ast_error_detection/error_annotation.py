@@ -258,7 +258,7 @@ class ErrorAnnotation:
         for insert in patterns:
             if insert['type'] == 'insert':
                 node_type_with_value = structural_path_element(insert['new']).upper()
-                context_path = " > ".join(structural_path_element(p) for p in insert['path'])
+                context_path = " > ".join(map(str, insert['path'])) if insert.get('path') else ""
 
                 # Handle cases where ":" is present
                 if ":" in node_type_with_value:
@@ -335,7 +335,7 @@ class ErrorAnnotation:
         for delete in patterns:
             if delete['type'] == 'delete':
                 node_type_with_value = structural_path_element(delete['current']).upper()
-                context_path = " > ".join(structural_path_element(p) for p in delete['path'])
+                context_path = " > ".join(map(str, delete['path'])) if delete.get('path') else ""
 
                 # Handle cases where ":" is present
                 if ":" in node_type_with_value:
@@ -494,7 +494,6 @@ class ErrorAnnotation:
             "ASSIGN": "UNNECESSARY_ASSIGN_STATEMENT",
             "FUNCTIONDEF": "UNNECESSARY_FUNCTION_DEFINITION",
             "RETURN": "UNNECESSARY_RETURN",
-            "CONST": "UNNECESSARY_CONST_VALUE",
             "OPERATION": "UNNECESSARY_OPERATION",
             "ARGUMENT": "UNNECESSARY_ARGUMENT",
             "VAR": "UNNECESSARY_VARIABLE",

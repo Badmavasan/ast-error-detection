@@ -263,8 +263,22 @@ def get_customized_error_tags(input_list):  # new version
         # the annotation tag indicates print is not called in the right position in the code
         # and the error context matches a native 'print' function call.
         # This ensures that misplaced 'print' calls are flagged separately from other call errors.
-        if tag == ANNOTATION_TAG_INCORRECT_POSITION_CALL and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT, context):
-            error_list.append(F_CALL_INCORRECT_POSITION_PRINT)
+        incorrect_position_tags = [
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT, F_CALL_INCORRECT_POSITION_PRINT),
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_HAUT, F_CALL_INCORRECT_POSITION_HAUT),
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_BAS, F_CALL_INCORRECT_POSITION_BAS),
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_GAUCHE, F_CALL_INCORRECT_POSITION_GAUCHE),
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_DROITE, F_CALL_INCORRECT_POSITION_DROITE),
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER, F_CALL_INCORRECT_POSITION_TOURNER),
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER, F_CALL_INCORRECT_POSITION_AVANCER),
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_LEVER, F_CALL_INCORRECT_POSITION_POSER),
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_POSER, F_CALL_INCORRECT_POSITION_LEVER),
+            (ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_ARC, F_CALL_INCORRECT_POSITION_ARC)
+        ]
+
+        for pattern, error_tag in incorrect_position_tags:
+            if tag == ANNOTATION_TAG_INCORRECT_POSITION_CALL and re.search(pattern, context):
+                error_list.append(error_tag)
 
         if tag == ANNOTATION_TAG_INCORRECT_POSITION_ASSIGN:
             error_list.append(EXP_ERROR_ASSIGNMENT_MISPLACED)
