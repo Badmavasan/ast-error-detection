@@ -7,6 +7,23 @@ main.py
 
 test/
 
+data/
+
+annotations/
+
+asterrdetection.egg-info/
+
+build/
+
+dist /
+
+exercises.json
+
+feedback.json
+
+
+error_annotation_algopython.py
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.

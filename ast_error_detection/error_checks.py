@@ -126,6 +126,10 @@ def get_customized_error_tags(input_list):  # new version
     if unnecessary_assignment_expression_error is not None:
         error_list.append(unnecessary_assignment_expression_error)
 
+    # Pre-compute the set of all primary tags present in the input.
+    # Used to guard rules that must only fire when a construct EXISTS in the student code.
+    _all_primary_tags = {entry[0] for entry in input_list if entry}
+
     for error_details in input_list:
         # Ensure the error detail has the expected number of elements; if not, skip it.
         if len(error_details) not in (3, 4):
@@ -218,10 +222,28 @@ def get_customized_error_tags(input_list):  # new version
                 error_list.append(F_CALL_UNNECESSARY)
 
         # Check for Errors Inside Print Function Calls
-        # The error code F_CALL_PRINT_ERROR_ARG is added to the error list whenever an error is detected
-        # inside the arguments of a 'print' function call.
-        # The type of error originates from the primary errors and can be of any kind.
-        if tag not in F_CALL_PRINT_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_ARG, context):
+        # F_CALL_PRINT_ERROR_ARG is triggered by two complementary conditions:
+        #
+        # 1. Wrong / extra element already present inside the call:
+        #    context contains "Call: print > ..." (the error node is a child of print).
+        #    UNNECESSARY_CALL_STATEMENT is excluded because that flags print itself as unwanted.
+        #    VARIABLE_MISMATCH is now included: a wrong variable inside print's args is an arg error.
+        #
+        # 2. Missing element inside the call:
+        #    When an arg is absent the Zhang-Shasha path only reaches "Call: print" (no "> ..."
+        #    after it), so the PRINT_ARG regex fails. We catch these MISSING_* tags separately
+        #    using the broader PRINT regex.
+        #    MISSING_CALL_STATEMENT is excluded because that is already handled by F_CALL_MISSING_PRINT.
+        if tag != ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_ARG, context):
+            error_list.append(F_CALL_PRINT_ERROR_ARG)
+
+        _print_missing_arg_tags = {
+            ANNOTATION_TAG_MISSING_CONST_VALUE,
+            ANNOTATION_TAG_MISSING_VARIABLE,
+            ANNOTATION_TAG_MISSING_ARGUMENT,
+            ANNOTATION_TAG_MISSING_OPERATION,
+        }
+        if tag in _print_missing_arg_tags and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT, context):
             error_list.append(F_CALL_PRINT_ERROR_ARG)
 
         if tag not in F_CALL_DESIGN_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER_ARG, context):
@@ -248,14 +270,40 @@ def get_customized_error_tags(input_list):  # new version
         if tag not in F_CALL_ROBOT_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS and re.search(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_BAS_ARG, context):
             error_list.append(F_CALL_BAS_ERROR)
 
-        # Check for Errors Related to Invalid Operations
-        # The error code EXP_ERROR_OPERATION is added to the error list whenever an error is detected
-        # and the error context contains "Operation:".
-        # This indicates there is a problem with an operation, such as:
-        #   - Variable-to-variable operations (e.g., a + b)
-        #   - Literal-to-literal operations (e.g., 1 + 2)
-        #   - Mixed variable-literal operations (e.g., a + 1)
+        # ── EXP_ERROR_OPERANDS ──────────────────────────────────────────────────────
+        # The operation expression IS present in both codes, but its operands are wrong;
+        # OR an operation is entirely extra / entirely missing (changing what the operand
+        # evaluates to), but the operator itself is not the issue.
+        # Examples:
+        #   print(k+2) vs print(k+1)  → wrong constant operand (CONST_VALUE_MISMATCH inside op)
+        #   print(k+1) vs print(k)    → whole operation is unnecessary (UNNECESSARY_OPERATION)
+        #   print(k)   vs print(k+1)  → whole operation is missing   (MISSING_OPERATION)
+        # Guard for cases 2 & 3: inside Assign context the assignment-level errors
+        # (VA_EXPRESSION_ASSIGNMENT_TO_VARIABLE_ERROR) are the appropriate typology.
+
+        # Case 1 – wrong constant value inside an existing operation
         if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and re.search(ANNOTATION_CONTEXT_OPERATION, context):
+            error_list.append(EXP_ERROR_OPERANDS)
+            error_list.append(EXP_ERROR_OPERATION)
+        # Case 2 – student wrote an operation that should not be there
+        if tag == ANNOTATION_TAG_UNNECESSARY_OPERATION and ANNOTATION_CONTEXT_ASSIGN not in context:
+            error_list.append(EXP_ERROR_OPERANDS)
+            error_list.append(EXP_ERROR_OPERATION)
+        # Case 3 – student is missing an operation that should be there
+        if tag == ANNOTATION_TAG_MISSING_OPERATION and ANNOTATION_CONTEXT_ASSIGN not in context:
+            error_list.append(EXP_ERROR_OPERANDS)
+            error_list.append(EXP_ERROR_OPERATION)
+
+        # ── EXP_ERROR_OPERATOR ──────────────────────────────────────────────────────
+        # The operation expression IS present in both codes but the operator TYPE is wrong
+        # (e.g. student wrote k-1 but should have written k+1 → Operation: - updated to Operation: +).
+        # Primary tag: INCORRECT_OPERATION_IN_ASSIGN (emitted by track_all_updates when an
+        # Operation node label changes).
+        # Guard: inside Assign context the VA_EXPRESSION_ASSIGNMENT_TO_VARIABLE_ERROR rule
+        # already captures operator-type errors at the assignment level; only fire here when
+        # the faulty operation lives outside an assignment (e.g. inside a print call).
+        if tag == ANNOTATION_TAG_INCORRECT_OPERATION_IN_ASSIGN and ANNOTATION_CONTEXT_ASSIGN not in context:
+            error_list.append(EXP_ERROR_OPERATOR)
             error_list.append(EXP_ERROR_OPERATION)
 
         # Check for Incorrect Position of 'print' Function Calls
@@ -286,7 +334,7 @@ def get_customized_error_tags(input_list):  # new version
         if tag == ANNOTATION_TAG_INCORRECT_POSITION_FOR:
             error_list.append(LO_FOR_MISPLACED)
 
-        if tag == ANNOTATION_TAG_UNNECESSARY_FOR_LOOP and (re.search(ANNOTATION_CONTEXT_FOR_LOOP, context) or context2.split(" ")[-1] == ANNOTATION_CONTEXT_FOR_NODE_NAME):
+        if tag == ANNOTATION_TAG_UNNECESSARY_FOR_LOOP and (re.search(ANNOTATION_CONTEXT_FOR_LOOP, context) or (context2 and context2.split(" ")[-1] == ANNOTATION_CONTEXT_FOR_NODE_NAME)):
             error_list.append(LO_FOR_UNNECESSARY)
 
         if tag == ANNOTATION_TAG_UNNECESSARY_WHILE_LOOP and (re.search(ANNOTATION_CONTEXT_WHILE_LOOP, context) or context2.split(" ")[-1] == ANNOTATION_CONTEXT_WHILE_NODE_NAME):
@@ -299,7 +347,7 @@ def get_customized_error_tags(input_list):  # new version
         # ITERATION ERROR
         if tag == ANNOTATION_TAG_CONST_VALUE_MISMATCH and "For > Condition: > Call: range > Const" in context:
             number1 = int(context.split(" ")[-1])
-            number2 = int(context2.split(" ")[-1])
+            number2 = int(error_details[2].split(" ")[-1]) if len(error_details) == 4 else int(context2.split(" ")[-1])
             if abs(number1 - number2) > 1:
                 error_list.append(LO_FOR_NUMBER_ITERATION_ERROR)
             else:
@@ -356,6 +404,35 @@ def get_customized_error_tags(input_list):  # new version
         # but the value used for initialization is incorrect.
         if tag == VAR_CONST_MISMATCH and re.search(ANNOTATION_CONTEXT_VAR, context):
             error_list.append(VA_DECLARATION_INITIALIZATION_ERROR)
+
+        # Error : VA_EXPRESSION_ASSIGNMENT_TO_VARIABLE_ERROR
+        # The assignment exists in BOTH the correct and the student code, but the expression
+        # inside the assignment scope is wrong.  Three primary-error sources are used:
+        #
+        #   1. INCORRECT_OPERATION_IN_ASSIGN — generated by an UPDATE on an Operation node,
+        #      so the Assign node is guaranteed to be present in both trees. Always safe to fire.
+        #
+        #   2. MISSING_OPERATION inside an Assign — the student wrote `x = a` when the correct
+        #      code is `x = a + b`.  BUT Zhang-Shasha also emits MISSING_OPERATION when the
+        #      entire assignment is absent (all child nodes are reported as missing too).
+        #      Guard: only fire if MISSING_ASSIGN_STATEMENT is NOT in the primary errors,
+        #      which would indicate the assignment itself is absent.
+        #
+        #   3. UNNECESSARY_OPERATION inside an Assign — the student wrote `x = a + b` when the
+        #      correct code is `x = a`.  Same caveat as above for the unnecessary case.
+        #      Guard: only fire if UNNECESSARY_ASSIGN_STATEMENT is NOT in the primary errors.
+        if tag == ANNOTATION_TAG_INCORRECT_OPERATION_IN_ASSIGN and ANNOTATION_CONTEXT_ASSIGN in context:
+            error_list.append(VA_EXPRESSION_ASSIGNMENT_TO_VARIABLE_ERROR)
+
+        if (tag == ANNOTATION_TAG_MISSING_OPERATION
+                and ANNOTATION_CONTEXT_ASSIGN in context
+                and "MISSING_ASSIGN_STATEMENT" not in _all_primary_tags):
+            error_list.append(VA_EXPRESSION_ASSIGNMENT_TO_VARIABLE_ERROR)
+
+        if (tag == ANNOTATION_TAG_UNNECESSARY_OPERATION
+                and ANNOTATION_CONTEXT_ASSIGN in context
+                and "UNNECESSARY_ASSIGN_STATEMENT" not in _all_primary_tags):
+            error_list.append(VA_EXPRESSION_ASSIGNMENT_TO_VARIABLE_ERROR)
 
         # FUNCTION : error 2 : definition error return
         if tag == ANNOTATION_TAG_MISSING_RETURN or tag == ANNOTATION_TAG_UNNECESSARY_RETURN or (

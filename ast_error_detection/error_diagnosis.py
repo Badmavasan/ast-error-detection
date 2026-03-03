@@ -14,6 +14,7 @@ from .error_checks import get_customized_error_tags
 from .zang_shasha_distance import distance
 from .node import Node
 from .error_annotation import ErrorAnnotation
+from .node_functions import anonymize_variable_names
 
 
 def get_primary_code_errors(code1: str, code2: str):
@@ -56,6 +57,15 @@ def get_primary_code_errors(code1: str, code2: str):
     # Ensure both trees have valid roots
     if not tree1 or not tree2:
         raise ValueError("Failed to parse one or both code snippets.")
+
+    # Variable anonymization — applied independently to each tree so that
+    # programs using different variable names for the same structural role
+    # (e.g. ``n`` vs ``x``) are not penalised for a pure naming difference.
+    # Each tree's variables are renamed VAR_0, VAR_1, … by order of first
+    # appearance (pre-order). After this step the distance algorithm only
+    # sees genuine structural or value differences.
+    anonymize_variable_names(tree1[0])
+    anonymize_variable_names(tree2[0])
 
     # Zhang-Shasha Tree Edit Distance computation
     dist, ops = distance(

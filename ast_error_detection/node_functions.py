@@ -8,6 +8,51 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+def anonymize_variable_names(root):
+    """
+    Rename every ``Var: <name>`` node in the tree to ``Var: VAR_0``,
+    ``Var: VAR_1``, etc., based on the order in which each distinct variable
+    name is first encountered during a pre-order traversal.
+
+    This is applied **independently** to the student tree and the correct tree
+    before the Zhang-Shasha comparison so that two programs that use different
+    variable names for the same structural role (e.g. ``n`` vs ``x``) are not
+    penalised for a pure naming difference.  Only genuine structural or value
+    differences remain visible to the distance algorithm.
+
+    Handles:
+    - ``Var: name``  →  ``Var: VAR_k``
+    - ``Var: -name`` →  ``Var: -VAR_k``  (negated variable from UnaryOp)
+
+    Args:
+        root (Node): Root of the custom Node tree to anonymize in-place.
+
+    Returns:
+        dict: The ``{original_name: anonymous_name}`` mapping that was applied,
+              useful for debugging.
+    """
+    name_map = {}
+    counter = [0]
+
+    def traverse(node):
+        if node is None:
+            return
+        if node.label and node.label.startswith("Var: "):
+            rest = node.label[5:]                      # everything after "Var: "
+            negated = rest.startswith("-")
+            var_name = rest[1:] if negated else rest   # strip leading '-' if present
+            if var_name not in name_map:
+                name_map[var_name] = f"VAR_{counter[0]}"
+                counter[0] += 1
+            prefix = "-" if negated else ""
+            node.label = f"Var: {prefix}{name_map[var_name]}"
+        for child in node.children:
+            traverse(child)
+
+    traverse(root)
+    return name_map
+
+
 def print_ast_nodes(nodes, indent=0):
     """
     Recursively print the labels of an AST's nodes with indentation.
