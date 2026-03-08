@@ -478,6 +478,7 @@ Error inside `print`'s argument list:
 
 #### Rule: `F_CALL_INCORRECT_POSITION_<NAME>`
 - `tag == INCORRECT_STATEMENT_POSITION_CALL` AND context matches `r"Call:\s*<name>"` for each known function
+- Known names: `print`, `haut`, `bas`, `gauche`, `droite`, `tourner`, `avancer`, `lever`, `poser`, `arc`, `couleur`
 
 #### Rule: `F_DEFINITION_MISSING` / `F_DEFINITION_UNNECESSARY`
 - `tag == MISSING_FUNCTION_DEFINITION` → `F_DEFINITION_MISSING`
@@ -551,6 +552,24 @@ F_CALL_ROBOT_ERROR_ARG_EXCEPTION_ANNOTATION_TAGS  = [VARIABLE_MISMATCH]
 - `EXP_ERROR_OPERATOR` = right operands, wrong operator type (+ vs -, etc.).
 - Assignment-level errors (`EXP_ERROR_ASSIGNMENT_*`) = expression wholly absent / extra / misplaced.
 - `EXP_ERROR_OPERATION` always co-fires with whichever specific tag applies.
+
+#### Fix — `F_CALL_INCORRECT_POSITION_COULEUR` not emitted for misplaced `couleur` call (2026-03)
+**Root cause:** `couleur` was missing from two places:
+1. No `F_CALL_INCORRECT_POSITION_COULEUR` constant in `constants.py`.
+2. No entry for `couleur` in the `incorrect_position_tags` dispatch list in `error_checks.py`.
+
+The primary layer (`detect_incorrect_statement_positions`) correctly produced `INCORRECT_STATEMENT_POSITION_CALL` when Z-S emitted a delete+insert pair for `Call: couleur` (distance 8). The typology layer simply had no rule to convert it into a specific tag, so the result was empty.
+
+**Fix:** Added `F_CALL_INCORRECT_POSITION_COULEUR = "F_CALL_INCORRECT_POSITION_COULEUR"` to `constants.py` and added `(ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_COULEUR, F_CALL_INCORRECT_POSITION_COULEUR)` to the `incorrect_position_tags` list in `error_checks.py`.
+
+**Example:**
+```
+incorrect: couleur(255,0,0)\nfor k in range(6): arc(k+1,90)\navancer(4)\nfor k in range(3): arc(3-k,180)
+correct:   for k in range(6): arc(k+1,90)\ncouleur(255,0,0)\navancer(4)\nfor k in range(3): arc(3-k,180)
+output:    {'F_CALL_INCORRECT_POSITION_COULEUR'}
+```
+
+---
 
 #### Fix — Spurious `UNNECESSARY_VARIABLE` errors from variable-name differences (2026-03)
 **Root cause:** When comparing two programs that use different variable names for the same structural role (e.g. `n` in student code vs `x` in correct code), Zhang-Shasha aligned `Var: n` with `Var: x` and produced one `UNNECESSARY_VARIABLE` update per occurrence of the variable — masking the real errors.
