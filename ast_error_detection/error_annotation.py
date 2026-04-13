@@ -15,7 +15,8 @@ from ast_error_detection.constants import ANNOTATION_TAG_CONST_VALUE_MISMATCH, \
     F_CALL_UNNECESSARY_TOURNER, ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_PRINT_NODE_NAME, \
     ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_AVANCER_NODE_NAME, \
     ANNOTATION_CONTEXT_CALL_NATIVE_FUNCTION_TOURNER_NODE_NAME, ANNOTATION_TAG_UNNECESSARY_FOR_LOOP, \
-    ANNOTATION_TAG_UNNECESSARY_WHILE_LOOP, ANNOTATION_TAG_MISSING_FOR_LOOP
+    ANNOTATION_TAG_UNNECESSARY_WHILE_LOOP, ANNOTATION_TAG_MISSING_FOR_LOOP, \
+    ANNOTATION_TAG_INCORRECT_FUNCTION_NAME
 import re
 
 ### HIGH LEVEL RULES ##
@@ -334,14 +335,14 @@ class ErrorAnnotation:
         # Analyze delete operations
         for delete in patterns:
             if delete['type'] == 'delete':
-                node_type_with_value = structural_path_element(delete['current']).upper()
+                original_label = structural_path_element(delete['current'])
+                node_type_with_value = original_label.upper()
                 context_path = " > ".join(map(str, delete['path'])) if delete.get('path') else ""
 
                 # Handle cases where ":" is present
                 if ":" in node_type_with_value:
-                    node_type, value = node_type_with_value.split(":", 1)
-                    node_type = node_type.strip().upper()
-                    value = value.strip()
+                    node_type = node_type_with_value.split(":", 1)[0].strip().upper()
+                    value = original_label.split(":", 1)[1].strip()  # preserve original case
                 else:
                     node_type = node_type_with_value
                     value = None
@@ -536,6 +537,11 @@ class ErrorAnnotation:
                     updates.append((ANNOTATION_TAG_CONST_VALUE_MISMATCH, current_value, new_value, context_path))
                 elif "ASSIGN" in node_type:
                     updates.append(("NODE_TYPE_MISMATCH", current_value, new_value, context_path))
+                elif node_type.startswith("FUNCTION:"):
+                    # Function name was changed (e.g. def foo → def bar)
+                    updates.append((ANNOTATION_TAG_INCORRECT_FUNCTION_NAME, current_value, new_value, context_path))
+                elif "ARG:" in node_type:
+                    continue  # Parameter name difference is not an error per spec
                 elif "VAR" in node_type:
                     continue  # Skip variable changes for now
 

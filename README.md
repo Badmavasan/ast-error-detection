@@ -356,7 +356,11 @@ Output: `(tag, value_or_None, context_path)`.
 | `COMPARE` | `INCORRECT_OPERATION_IN_CONDITION` | 4-tuple |
 | `OPERATION` | `INCORRECT_OPERATION_IN_ASSIGN` | 4-tuple |
 | `ASSIGN` | `NODE_TYPE_MISMATCH` | 4-tuple |
+| `FUNCTION: <name>` (starts with) | `INCORRECT_FUNCTION_NAME` | 4-tuple |
+| `ARG: <name>` | skipped (parameter name diff is not an error) | — |
 | `VAR` | skipped | — |
+
+> **Note on `UNNECESSARY_VAR` / `UNNECESSARY_CONST_VALUE`:** These primary tag strings are emitted by `detect_unnecessary_deletions` (node types `VAR` / `CONST`). The corresponding constants `ANNOTATION_TAG_UNNECESSARY_VAR` and `ANNOTATION_TAG_UNNECESSARY_CONST_VALUE` are defined in `constants.py` as documentation companions.
 
 Also handles node-TYPE replacements (e.g. `FOR` replaced by `WHILE` in update): emits `UNNECESSARY_<old>` + `MISSING_<new>`.
 
@@ -489,6 +493,83 @@ Error inside `print`'s argument list:
 - `tag == UNNECESSARY_RETURN_IN_FUNCTION`
 - `tag == MISSING_VARIABLE` AND `"Function"` in context AND `"Return > Tuple"` in context
 
+#### Rule: `FUNCTION_DEFINITION_NAME_ERROR`
+The student's function has the wrong name (the `Function: <name>` node label was updated by Zhang-Shasha).
+- `tag == INCORRECT_FUNCTION_NAME`
+
+Primary tag `INCORRECT_FUNCTION_NAME` is emitted by `track_all_updates` when the updated node's type (last path element) starts with `"FUNCTION:"`, meaning the function node label itself changed (e.g. `Function: foo` → `Function: bar`).
+
+#### Rule: `FUNCTION_DEFINITION_MISSING_PARAMETER`
+The student's function definition is missing a required parameter.
+- `tag == MISSING_ARGUMENT` AND `"arguments"` in context
+
+The `"arguments"` substring reliably identifies function-definition parameter context because `ast.arguments` (the parameter list of a `def`) is represented as a `Node("arguments", ...)` wrapper, which only appears under `Function:` nodes — never under `Call:` nodes (where call arguments are direct `Var:`/`Const:` children).
+
+#### Rule: `FUNCTION_DEFINITION_UNNECESSARY_PARAMETER`
+The student's function definition has an extra parameter that should not be there.
+- `tag == UNNECESSARY_ARGUMENT` AND `"arguments"` in context
+
+**Note on parameter name differences:** A difference in parameter *name only* (e.g. student writes `def foo(a)`, correct is `def foo(b)`) does **not** trigger this error. The primary layer (`track_all_updates`) explicitly skips `Arg:` node updates (`"ARG:" in node_type → continue`), so no primary tag is emitted for name-only differences.
+
+#### Rule: `FUNCTION_DEFINITION_MISSING_RETURN`
+The student's function is missing its return statement.
+- `tag == MISSING_RETURN`
+
+This fires in addition to `F_DEFINITION_ERROR_RETURN` (which also covers unnecessary returns and wrong return variables). `FUNCTION_DEFINITION_MISSING_RETURN` is the specific signal for a purely absent return.
+
+#### Rule: `FUNCTION_DEFINITION_BODY_ERROR` (umbrella)
+Fires whenever any error is detected inside a function's body (the executable statements, not the parameter list or the function name itself). Co-fires alongside the specific error tags.
+- `re.search(r"Function:.*>", context)` → the error is nested inside a function (at least one path segment after `Function:`)
+- AND `"arguments"` NOT in context → not in the parameter list
+- AND `tag != INCORRECT_FUNCTION_NAME` → not the function-name update itself
+
+Examples of errors that trigger `FUNCTION_DEFINITION_BODY_ERROR`:
+- `MISSING_RETURN` with context `"Module > Function: foo > Return"` → also fires `FUNCTION_DEFINITION_MISSING_RETURN`
+- `MISSING_CALL_STATEMENT` with context `"Module > Function: foo > Call: print"` → also fires `F_CALL_MISSING_PRINT`
+- `CONST_VALUE_MISMATCH` with context `"Module > Function: foo > Assign > Const: 5"` → also fires `VA_DECLARATION_INITIALIZATION_ERROR`
+
+The umbrella is intentionally broad: any structural or content deviation inside the function body raises it.
+
+#### Declared-function call rules — discriminator
+
+All five rules below distinguish calls to **user-declared functions** from calls to known built-ins (`print`, `range`, `avancer`, `tourner`, `couleur`, `arc`, `gauche`, `haut`, `bas`, `droite`, `poser`, `lever`) using the helper `_is_declared_function(name)` which checks `name.lower() not in KNOWN_BUILTIN_FUNCTION_NAMES`.
+
+The function name is always extracted via `re.search(r"Call:\s*([A-Za-z_]\w*)", context)` (or from `context2` for call-level tags). Because `[` is not a word character, the regex correctly captures `"foo"` even when the path element is `"Call: foo[0]"`.
+
+#### Rule: `DECLARED_FUNCTION_CALL_MISSING`
+A required call to a user-declared function is absent from the student code.
+- `tag == MISSING_CALL_STATEMENT` AND `_is_declared_function(context2.split(" ")[-1])`
+
+`context2` here is `insert['new']` = `"Call: foo"`, so the last token is the function name.
+
+#### Rule: `DECLARED_FUNCTION_CALL_UNNECESSARY`
+The student added a call to a user-declared function that should not be there.
+- `tag == UNNECESSARY_CALL_STATEMENT` AND `_is_declared_function(context2.split(" ")[-1])`
+
+`context2` here is the `value` field = the function name directly (e.g. `"foo"`).
+
+#### Rule: `DECLARED_FUNCTION_CALL_INCORRECT_NUMBER_OF_PARAMETERS`
+The call exists in both trees but with a wrong number of arguments.
+
+- `tag in {MISSING_VARIABLE, MISSING_CONST_VALUE, MISSING_OPERATION, UNNECESSARY_VAR, UNNECESSARY_CONST_VALUE, UNNECESSARY_OPERATION}` AND `re.search(FUNCTION_CALL_NODE, context)` captures a non-built-in name
+
+The high-level filtering guarantees that these tags are NOT emitted inside a missing call's context (the `MISSING_CALL_STATEMENT` rule suppresses all child errors). So if any of these tags fires inside `Call: foo`, the call itself exists and the arity is wrong.
+
+#### Rule: `DECLARED_FUNCTION_CALL_INCORRECT_PARAMETER`
+The call exists with the correct number of arguments but the parameter values are wrong.
+
+- `tag in {CONST_VALUE_MISMATCH, VARIABLE_MISMATCH, INCORRECT_OPERATION_IN_ASSIGN}` AND `re.search(FUNCTION_CALL_NODE, context)` captures a non-built-in name
+
+**Variable name handling:** Pure variable-name differences (e.g. student passes `x`, correct expects `y`) are absorbed by `anonymize_variable_names` before distance computation — both become `VAR_0` and produce no edit op. Only genuine structural mismatches (wrong constant, wrong operator, structurally different variable arrangement) reach this rule.
+
+#### Rule: `DECLARED_FUNCTION_CALL_INCORRECT_POSITION`
+The call to a user-declared function is in the wrong location (Zhang-Shasha emitted a delete+insert pair for the same `Call: <name>` label).
+- `tag == INCORRECT_STATEMENT_POSITION_CALL` AND `re.search(FUNCTION_CALL_NODE, context)` captures a non-built-in name
+
+Context points to the **target** (insert) location.
+
+---
+
 #### Rule: `CS_MISSING`
 - `tag == MISSING_IF_STATEMENT`
 
@@ -568,6 +649,51 @@ incorrect: couleur(255,0,0)\nfor k in range(6): arc(k+1,90)\navancer(4)\nfor k i
 correct:   for k in range(6): arc(k+1,90)\ncouleur(255,0,0)\navancer(4)\nfor k in range(3): arc(3-k,180)
 output:    {'F_CALL_INCORRECT_POSITION_COULEUR'}
 ```
+
+---
+
+#### Feature — Declared function call error taxonomy (2026-04)
+
+Added five typology codes for errors in using a student-defined function:
+
+| Code | Trigger condition |
+|---|---|
+| `DECLARED_FUNCTION_CALL_MISSING` | `MISSING_CALL_STATEMENT` + name not in built-ins |
+| `DECLARED_FUNCTION_CALL_UNNECESSARY` | `UNNECESSARY_CALL_STATEMENT` + name not in built-ins |
+| `DECLARED_FUNCTION_CALL_INCORRECT_NUMBER_OF_PARAMETERS` | `MISSING_VARIABLE/CONST_VALUE/OPERATION` or `UNNECESSARY_VAR/CONST_VALUE/OPERATION` inside a non-built-in `Call:` |
+| `DECLARED_FUNCTION_CALL_INCORRECT_PARAMETER` | `CONST_VALUE_MISMATCH`, `VARIABLE_MISMATCH`, or `INCORRECT_OPERATION_IN_ASSIGN` inside a non-built-in `Call:` |
+| `DECLARED_FUNCTION_CALL_INCORRECT_POSITION` | `INCORRECT_STATEMENT_POSITION_CALL` + name not in built-ins |
+
+**Discrimination:** The helper `_is_declared_function(name)` checks `name.lower() not in KNOWN_BUILTIN_FUNCTION_NAMES`. The known built-ins frozenset (`print`, `range`, `avancer`, `tourner`, `couleur`, `arc`, `gauche`, `haut`, `bas`, `droite`, `poser`, `lever`) is defined in `constants.py` as `KNOWN_BUILTIN_FUNCTION_NAMES`.
+
+**Variable name transparency:** `DECLARED_FUNCTION_CALL_INCORRECT_PARAMETER` does NOT fire for pure parameter-name differences. `anonymize_variable_names` renames every `Var:` node to `VAR_k` before Zhang-Shasha, so `foo(x)` vs `foo(y)` produces no edit ops and no error. Only genuine value/structural mismatches (wrong constant, wrong operator, structurally different arg expression) trigger this rule.
+
+**No changes to Layer 1** — all required primary tags already existed.
+
+**New constants:** `DECLARED_FUNCTION_CALL_*` error codes, `KNOWN_BUILTIN_FUNCTION_NAMES` frozenset, `ANNOTATION_TAG_UNNECESSARY_VAR`, `ANNOTATION_TAG_UNNECESSARY_CONST_VALUE`.
+
+---
+
+#### Feature — Function definition error taxonomy (2026-04)
+
+Added five new typology error codes for function definition mistakes:
+
+| Code | When |
+|---|---|
+| `FUNCTION_DEFINITION_NAME_ERROR` | The function name was changed (primary tag `INCORRECT_FUNCTION_NAME` from `track_all_updates` when `FUNCTION:` node label is updated) |
+| `FUNCTION_DEFINITION_MISSING_PARAMETER` | A required parameter is absent (`MISSING_ARGUMENT` with `"arguments"` in context) |
+| `FUNCTION_DEFINITION_UNNECESSARY_PARAMETER` | An extra parameter is present (`UNNECESSARY_ARGUMENT` with `"arguments"` in context) |
+| `FUNCTION_DEFINITION_MISSING_RETURN` | The return statement is absent (`MISSING_RETURN` tag) |
+| `FUNCTION_DEFINITION_BODY_ERROR` | Umbrella — any error inside the function body (context matches `Function:.*>`, no `"arguments"` in context, not the name-change tag itself) |
+
+**Parameter-name-only differences are suppressed:** `track_all_updates` now skips `Arg:` node updates (`"ARG:" in node_type → continue`), so renaming a parameter (e.g. `def foo(a)` vs `def foo(b)`) produces no primary tag and no typology error.
+
+**New primary tag:** `INCORRECT_FUNCTION_NAME = "INCORRECT_FUNCTION_NAME"` (4-tuple) emitted by `track_all_updates` when `node_type.startswith("FUNCTION:")`.
+
+**Context discriminators:**
+- `"arguments"` in context → error is in the parameter list (function def parameters)
+- `re.search(r"Function:.*>", context)` → error is nested inside a function body
+- `"arguments"` in context excludes parameter-list errors from `FUNCTION_DEFINITION_BODY_ERROR`
 
 ---
 

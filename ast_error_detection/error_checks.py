@@ -61,6 +61,16 @@ def process_tag_triplets(input_list, required_tags, match_start, match_end, erro
     return None
 
 
+def _is_declared_function(name: str) -> bool:
+    """
+    Returns True when *name* refers to a user-declared (student-defined) function,
+    i.e. it is not one of the known built-in / native functions that already have
+    dedicated error rules (print, avancer, range, …).
+    The check is case-insensitive so that capitalisation variants are still caught.
+    """
+    return bool(name) and name.lower() not in KNOWN_BUILTIN_FUNCTION_NAMES
+
+
 def get_customized_error_tags(input_list):  # new version
     """
     Analyzes a list of error details for specific tag and context patterns,
@@ -129,6 +139,25 @@ def get_customized_error_tags(input_list):  # new version
     # Pre-compute the set of all primary tags present in the input.
     # Used to guard rules that must only fire when a construct EXISTS in the student code.
     _all_primary_tags = {entry[0] for entry in input_list if entry}
+
+    # ── Tag sets used by the declared-function-call rules (defined once, outside loop) ──
+    # Tags that indicate a missing or extra argument *inside* a call (wrong arity).
+    _wrong_arity_tags = {
+        ANNOTATION_TAG_MISSING_VARIABLE,
+        ANNOTATION_TAG_MISSING_CONST_VALUE,
+        ANNOTATION_TAG_MISSING_OPERATION,
+        ANNOTATION_TAG_UNNECESSARY_VAR,
+        ANNOTATION_TAG_UNNECESSARY_CONST_VALUE,
+        ANNOTATION_TAG_UNNECESSARY_OPERATION,
+    }
+    # Tags that indicate the call exists with the right arity but wrong argument values.
+    # Variable-name-only differences are already suppressed by anonymization in Layer 1;
+    # any remaining mismatch here is a genuine value/expression error.
+    _wrong_param_value_tags = {
+        ANNOTATION_TAG_CONST_VALUE_MISMATCH,
+        ANNOTATION_TAG_VARIABLE_MISMATCH,
+        ANNOTATION_TAG_INCORRECT_OPERATION_IN_ASSIGN,
+    }
 
     for error_details in input_list:
         # Ensure the error detail has the expected number of elements; if not, skip it.
@@ -439,6 +468,97 @@ def get_customized_error_tags(input_list):  # new version
         if tag == ANNOTATION_TAG_MISSING_RETURN or tag == ANNOTATION_TAG_UNNECESSARY_RETURN or (
                 tag == ANNOTATION_TAG_MISSING_VARIABLE and ANNOTATION_CONTEXT_RETURN_1 in context and ANNOTATION_CONTEXT_RETURN_2 in context):
             error_list.append(F_DEFINITION_ERROR_RETURN)
+
+        # ── FUNCTION DEFINITION ERRORS ─────────────────────────────────────────────
+
+        # FUNCTION_DEFINITION_NAME_ERROR
+        # Primary tag INCORRECT_FUNCTION_NAME is emitted when a Function: node label
+        # is updated (i.e. the function name itself was changed).
+        if tag == ANNOTATION_TAG_INCORRECT_FUNCTION_NAME:
+            error_list.append(FUNCTION_DEFINITION_NAME_ERROR)
+
+        # FUNCTION_DEFINITION_MISSING_PARAMETER
+        # A required parameter is absent from the student's function definition.
+        # Guard: context must contain "arguments" (the ast.arguments wrapper node),
+        # which distinguishes function-definition params from function-call arguments.
+        if tag == ANNOTATION_TAG_MISSING_ARGUMENT and ANNOTATION_CONTEXT_FUNCTION_ARGUMENTS in context:
+            error_list.append(FUNCTION_DEFINITION_MISSING_PARAMETER)
+
+        # FUNCTION_DEFINITION_UNNECESSARY_PARAMETER
+        # The student's function definition has an extra parameter that is not expected.
+        # NOTE: a difference in *parameter name only* does NOT raise this error — the
+        # primary layer skips Arg: node updates so they produce no primary tag.
+        if tag == ANNOTATION_TAG_UNNECESSARY_ARGUMENT and ANNOTATION_CONTEXT_FUNCTION_ARGUMENTS in context:
+            error_list.append(FUNCTION_DEFINITION_UNNECESSARY_PARAMETER)
+
+        # FUNCTION_DEFINITION_MISSING_RETURN
+        # The student's function is missing its return statement.
+        if tag == ANNOTATION_TAG_MISSING_RETURN:
+            error_list.append(FUNCTION_DEFINITION_MISSING_RETURN)
+
+        # FUNCTION_DEFINITION_BODY_ERROR (umbrella)
+        # Fires whenever any error is detected *inside* a function body
+        # (not on the function node itself, not in the parameter list).
+        # Uses ANNOTATION_CONTEXT_FUNCTION_DEFINITION_BODY regex which requires
+        # at least one " > " segment after the "Function:" part of the context.
+        if (re.search(ANNOTATION_CONTEXT_FUNCTION_DEFINITION_BODY, context)
+                and ANNOTATION_CONTEXT_FUNCTION_ARGUMENTS not in context
+                and tag != ANNOTATION_TAG_INCORRECT_FUNCTION_NAME):
+            error_list.append(FUNCTION_DEFINITION_BODY_ERROR)
+
+        # ── DECLARED FUNCTION CALL ERRORS ──────────────────────────────────────────
+        # "Declared function" = any Call: <name> where <name> is NOT a known built-in.
+        # The _is_declared_function() helper (defined above the loop) performs this
+        # check; it is case-insensitive to tolerate capitalisation variants.
+
+        # DECLARED_FUNCTION_CALL_MISSING
+        # A required call to a user-declared function is absent in the student code.
+        # context2 for MISSING_CALL_STATEMENT is insert['new'] = "Call: foo",
+        # so the last space-delimited token is the function name.
+        if tag == ANNOTATION_TAG_MISSING_CALL_STATEMENT:
+            _fname = context2.split(" ")[-1] if context2 else ""
+            if _is_declared_function(_fname):
+                error_list.append(DECLARED_FUNCTION_CALL_MISSING)
+
+        # DECLARED_FUNCTION_CALL_UNNECESSARY
+        # The student added an extra call to a user-declared function.
+        # context2 for UNNECESSARY_CALL_STATEMENT is value = label-after-":", i.e.
+        # just the function name (e.g. "foo").
+        if tag == ANNOTATION_TAG_UNNECESSARY_CALL_STATEMENT:
+            _fname = context2.split(" ")[-1] if context2 else ""
+            if not _fname:
+                _m = re.search(ANNOTATION_CONTEXT_FUNCTION_CALL_NODE, context)
+                _fname = _m.group(1) if _m else ""
+            if _is_declared_function(_fname):
+                error_list.append(DECLARED_FUNCTION_CALL_UNNECESSARY)
+
+        # DECLARED_FUNCTION_CALL_INCORRECT_NUMBER_OF_PARAMETERS
+        # The call exists in both trees but with a different number of arguments:
+        # a missing arg generates MISSING_VARIABLE/CONST_VALUE/OPERATION, an extra arg
+        # generates UNNECESSARY_VAR/CONST_VALUE/OPERATION — all inside the call context.
+        # The high-level filtering guarantees these tags are NOT present when the entire
+        # call is absent (MISSING_CALL_STATEMENT suppresses children of missing calls).
+        if tag in _wrong_arity_tags:
+            _m = re.search(ANNOTATION_CONTEXT_FUNCTION_CALL_NODE, context)
+            if _m and _is_declared_function(_m.group(1)):
+                error_list.append(DECLARED_FUNCTION_CALL_INCORRECT_NUMBER_OF_PARAMETERS)
+
+        # DECLARED_FUNCTION_CALL_INCORRECT_PARAMETER
+        # The call has the right number of arguments but a wrong parameter value.
+        # Variable name differences are absorbed by anonymization (Var: x → Var: VAR_0)
+        # before the distance computation; any remaining mismatch here is a genuine error.
+        if tag in _wrong_param_value_tags:
+            _m = re.search(ANNOTATION_CONTEXT_FUNCTION_CALL_NODE, context)
+            if _m and _is_declared_function(_m.group(1)):
+                error_list.append(DECLARED_FUNCTION_CALL_INCORRECT_PARAMETER)
+
+        # DECLARED_FUNCTION_CALL_INCORRECT_POSITION
+        # The call to a user-declared function is present but at the wrong location
+        # (Zhang-Shasha emitted a delete + insert pair for the same Call: <name> label).
+        if tag == ANNOTATION_TAG_INCORRECT_POSITION_CALL:
+            _m = re.search(ANNOTATION_CONTEXT_FUNCTION_CALL_NODE, context)
+            if _m and _is_declared_function(_m.group(1)):
+                error_list.append(DECLARED_FUNCTION_CALL_INCORRECT_POSITION)
 
         # EXP : error 1 : error conditional branch
         if tag == ANNOTATION_TAG_INCORRECT_OPERATION_IN_COMP and ANNOTATION_CONTEXT_CS_CONDITION in context:
